@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One-time setup for the editing skills: checks ffmpeg and Node, makes kit/.venv, fetches GSAP,
-# warms up HyperFrames and (with --cutout) downloads the matting model. Safe to run again.
+# warms up HyperFrames, (with --cutout) downloads the matting model and (with --local-asr) installs local Whisper. Safe to run again.
 set -euo pipefail
 KIT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 say() { printf '\033[1m%s\033[0m\n' "$*"; }
@@ -27,10 +27,15 @@ fi
 say "warming up HyperFrames (first run downloads it)"
 npx --yes hyperframes@0.8.34 --version >/dev/null 2>&1 || echo "warning: could not run hyperframes yet; the first render will retry"
 
-if [ "${1:-}" = "--cutout" ]; then
+if [[ " $* " == *" --local-asr "* ]]; then
+  say "installing local Whisper (no Groq key needed)"
+  "$KIT/.venv/bin/python" -m pip install -q faster-whisper
+fi
+
+if [[ " $* " == *" --cutout "* ]]; then
   say "downloading the matting model"
   "$KIT/.venv/bin/python" -c "import sys; sys.path.insert(0, '$KIT'); import cutout; cutout.model_path('mobilenetv3')"
 fi
 
-[ -n "${GROQ_API_KEY:-}" ] || echo "note: set GROQ_API_KEY (free at https://console.groq.com/keys) so clips can be transcribed"
+[ -n "${GROQ_API_KEY:-}" ] || echo "note: set GROQ_API_KEY (free at https://console.groq.com/keys) so clips can be transcribed, or run setup with --local-asr"
 say "ready: $KIT/.venv/bin/python"

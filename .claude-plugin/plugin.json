@@ -1,7 +1,7 @@
 {
   "name": "editing-skills",
-  "version": "1.1.0",
-  "description": "Eleven video editing skills for Claude Code: six talking-head workflows and five photographic styles including Shape Shift, Picture Stack, Scene Switch, Visual Notes and Orbit Reel.",
+  "version": "1.2.0",
+  "description": "Twelve video editing skills for Claude Code: seven talking-head workflows (including glass-fx, a twelve-effect glass motion-graphics pack with a promo builder) and five photographic styles including Shape Shift, Picture Stack, Scene Switch, Visual Notes and Orbit Reel.",
   "author": {
     "name": "Artem Novitckii",
     "url": "https://novitckii.com"
@@ -10,11 +10,13 @@
   "repository": "https://github.com/artemnovitckii/claude-editing-skills",
   "license": "MIT",
   "keywords": [
-    "video",
-    "reels",
+    "captions",
     "editing",
+    "glassmorphism",
     "hyperframes",
     "instagram",
-    "captions"
+    "motion-graphics",
+    "reels",
+    "video"
   ]
 }

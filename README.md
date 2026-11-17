@@ -1,6 +1,6 @@
 # Claude editing skills
 
-Eleven skills for Claude Code: six workflows that edit your talking-head clips around your words, plus five photographic styles with editable templates and included image assets. Rendering happens on your own computer.
+Twelve skills for Claude Code: seven workflows that edit your talking-head clips around your words, plus five photographic styles with editable templates and included image assets. Rendering happens on your own computer.
 
 ![The six skills, one frame each](docs/skills.jpg)
 
@@ -12,6 +12,7 @@ Eleven skills for Claude Code: six workflows that edit your talking-head clips a
 | `/split-screen` | **The classic half-and-half.** A step badge, a serif headline and a window showing the step on top, you on the bottom, and captions on the seam. |
 | `/ranking-list` | **A tier list on your chest.** Each item pops up when you name it and drops into its tier (S to F) on the verdict. |
 | `/storytelling` | **Three image cards, a title and a subtitle**, all landing together over one continuous take, with simple TikTok-style captions. |
+| [`/glass-fx`](skills/glass-fx/SKILL.md) | **The premium glass look.** A violet (or teal, rose, silver) grade with floating spheres, captions whose key words turn serif italic, and twelve effects that land on your words: halo search with a cursor click, ribbon wrap, falling cards, social orbit, quote note, icon pop, typing search, film strip, chrome title, glass card, checklist and a full-screen takeover. It also makes the promo video around your reels ("12 video effects", before/after with a terminal prompt). |
 
 ## Five new photographic styles
 
@@ -35,7 +36,7 @@ More skills are coming. Pull the repo to get them.
 
 ## Install
 
-You need macOS or Linux with **ffmpeg**, **Node.js 22+** and **Python 3.9+**, plus a free **[Groq API key](https://console.groq.com/keys)** for the original six skills’ transcripts. The five photographic templates do not require an API key.
+You need macOS or Linux with **ffmpeg**, **Node.js 22+** and **Python 3.9+**, plus a free **[Groq API key](https://console.groq.com/keys)** for transcripts. No key? Run `./install.sh --local-asr` once and clips are transcribed on your own computer instead. The five photographic templates do not require an API key.
 
 ```bash
 brew install ffmpeg node        # if you don't have them
@@ -67,6 +68,7 @@ Open Claude Code anywhere and point it at a clip:
 /explainer ~/Downloads/my-clip.mp4
 /trial-reels ~/Downloads/my-reel.mp4 use the hook
 /behind-the-person ~/Downloads/clip.mp4, my posts are in ~/Desktop/posts
+/glass-fx ~/Downloads/talk.mp4 make it look like the purple glass reels
 ```
 
 The original six skills follow these five steps:
@@ -99,6 +101,6 @@ To add a skill, copy a folder in `skills/` and change its `build.py`. The origin
 - [GSAP](https://gsap.com) drives the animation. It is fetched at setup, not included here.
 - [RobustVideoMatting](https://github.com/PeterL1n/RobustVideoMatting) by Shanchuan Lin et al. (GPL-3.0) does the cutout. The model is downloaded at setup, not included here.
 - Transcription is Whisper on [Groq](https://groq.com).
-- The fonts are Inter, Archivo Black, DM Serif Display, Instrument Serif, Pixelify Sans and TikTok Sans, all under the SIL Open Font License.
+- The fonts are Inter, Archivo Black, Anton, DM Serif Display, Instrument Serif, Pixelify Sans and TikTok Sans, all under the SIL Open Font License.
 
 Made by [Artem Novitckii](https://novitckii.com). Code and authored instructions are MIT licensed; [image and sample-media rights are separate](assets/style-showcase/README.md#rights-and-sample-footage).

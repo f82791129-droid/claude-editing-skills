@@ -269,7 +269,7 @@ window.__timelines["main"] = tl;
         if out.exists():
             out.unlink()
         print(f'rendering {out.name} ...', flush=True)
-        r = subprocess.run(['npx', '--yes', HYPERFRAMES, 'render', str(self.dir), '-o', str(out), '--fps', str(FPS), '-q', 'high'],
+        r = subprocess.run(['npx', '--yes', HYPERFRAMES, 'render', str(self.dir), '-o', str(out), '--fps', str(FPS), '-q', os.environ.get('REEL_QUALITY', 'high')],
                            capture_output=True, text=True)
         if not out.exists():
             sys.exit(f'render failed:\n{r.stdout[-3000:]}\n{r.stderr[-3000:]}')
