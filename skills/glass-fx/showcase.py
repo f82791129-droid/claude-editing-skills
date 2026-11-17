@@ -134,7 +134,7 @@ class Show:
         b.append(f'<div class="a" id="kick" style="left:0;width:1080px;top:236px;text-align:center;font:700 40px Inter;color:#fff;'
                  f'letter-spacing:-.02em">{esc(j.get("kicker", "12 video"))}</div>')
         title = str(j.get('title', 'effects'))
-        self.chrome_line(title, 278, int(min(200, 960 / max(1, len(title) * .47))), 'ttl')
+        self.chrome_line(title, 278, int(min(200, 860 / max(1, len(title) * .5))), 'ttl')
         b.append(f'<div class="a" id="sub" style="left:0;width:1080px;top:470px;text-align:center;font-size:56px;color:#fff" class="sf">'
                  f'<span class="sf">{esc(j.get("subtitle", "our Claude skill makes"))}</span></div>')
         b.append(f'<div class="a" id="badge" style="left:512px;top:552px;width:56px;height:56px;border-radius:14px;background:#fff;'
@@ -182,12 +182,12 @@ class Show:
                      f'gap:16px;padding:12px 28px 12px 14px;border-radius:99px;background:#fff;box-shadow:0 14px 34px rgba(0,0,0,.4)">'
                      f'<i style="width:54px;height:54px;border-radius:50%;background:linear-gradient(160deg,#d4d4d8,#71717a)"></i>'
                      f'<span style="text-align:left"><span style="display:block;font:500 20px Inter;color:#71717a">{esc(j.get("handle", "someone · 2m"))}</span>'
-                     f'<span style="display:block;font:700 32px Inter;color:#111;letter-spacing:-.02em">{esc(j["comment"])}</span></span></span></div>')
+                     f'<span style="display:block;font:700 32px Inter;color:#111;letter-spacing:-.02em">{esc(j.get("comment"))}</span></span></span></div>')
         kick = (j.get('kicker') or 'I stopped paying for every reel.\nOne Claude skill').split('\n')
         b.append(f'<div class="a" id="kick" style="left:0;width:1080px;top:340px;text-align:center;font:600 44px/1.12 Inter;color:#fff;letter-spacing:-.02em">'
                  + '<br>'.join(esc(x) for x in kick) + '</div>')
         title = str(j.get('title', 'edits them all'))
-        self.chrome_line(title, 440, int(min(210, 1000 / max(1, len(title) * .43))), 'ttl')
+        self.chrome_line(title, 450, int(min(210, 860 / max(1, len(title) * .5))), 'ttl')
         portrait = aspect(self.main) < 1
         bef_box = 'left:80px;top:700px;width:300px;height:533px' if portrait else 'left:70px;top:700px;width:470px;height:300px'
         aft_box = ('left:560px;top:690px;width:440px;height:782px;transform:rotateY(-10deg)' if portrait else
@@ -204,7 +204,7 @@ class Show:
         mono = "'DejaVu Sans Mono','Menlo','Consolas',monospace"
         rows = (f'<div style="font:700 27px {mono};color:#fff">{esc(lines[0])}</div>'
                 f'<div style="margin:6px 0 12px;font:400 20px {mono};color:#8b8b98">{esc(lines[1])}</div>'
-                + ''.join(f'<div class="tl{n}" style="font:400 23px/1.55 {mono};color:{T["accent2"] if n == 0 else "#d4d4d8"}">'
+                + ''.join(f'<div class="tl{n}" style="white-space:nowrap;font:400 {19 if portrait else 23}px/1.55 {mono};color:{T["accent2"] if n == 0 else "#d4d4d8"}">'
                           f'{"❯ " if n == 0 else "&nbsp;&nbsp;"}{esc(x)}</div>' for n, x in enumerate(lines[2:])))
         b.append(f'<div class="a" id="term" style="left:{50 if portrait else 250}px;top:{1262 if portrait else 1480}px;width:{470 if portrait else 580}px;border-radius:22px;background:#151518;'
                  f'border:1.5px solid rgba(255,255,255,.14);box-shadow:0 30px 70px rgba(0,0,0,.6);padding:18px 22px 22px">'
