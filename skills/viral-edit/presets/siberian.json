@@ -1,0 +1,12 @@
+{
+  "_about": "Siberian Wellness ads for @sw.fidan (Fidan, Siberian Wellness independent consultant, Quba, delivery across Azerbaijan). Green + gold like her profile. Every time: the reel, a cover (green/gold, product + face, mouth closed) and a caption with a 'food supplement, not a medicine' note. Footage is usually AI presenter clips with the product box in the lower half: captions sit between chin and box, labels go to the empty side.",
+  "lang": "az",
+  "look": "cinema",
+  "theme": "emerald",
+  "brand": {"name": "Fidan", "handle": "@sw.fidan"},
+  "voice": "mic",
+  "cutout": false,
+  "grain": 0,
+  "sfx": {"palette": "clean", "level": "medium", "gap": 0.6},
+  "captions": {"style": "editorial", "top": 940}
+}

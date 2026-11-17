@@ -35,6 +35,7 @@ THEMES = {
     'gold':   dict(accent='#ffc533', accent2='#ffe7a3', deep='#0b0906', mid='#3a2c0c', glow='#ffd56b', ink='#1a1405'),
     'lime':   dict(accent='#c8f560', accent2='#e9fbbf', deep='#070a04', mid='#2c3a10', glow='#d8ff7a', ink='#141c05'),
     'red':    dict(accent='#ff3b30', accent2='#ffb3ad', deep='#0b0505', mid='#3d0f0c', glow='#ff6a61', ink='#1f0605'),
+    'emerald': dict(accent='#0b5c3c', accent2='#d9b866', deep='#03140d', mid='#0b3d29', glow='#e3c477', ink='#04170f'),
     'navy':   dict(accent='#1f4fd6', accent2='#9cc0ff', deep='#030817', mid='#0a2160', glow='#3d7bff', ink='#020a24'),
     'sky':    dict(accent='#3fa9ff', accent2='#bfe2ff', deep='#04080d', mid='#0e3156', glow='#7cc4ff', ink='#06182b'),
 }
@@ -404,7 +405,7 @@ class Reel(EditorialFX):
                         f'tl.fromTo("#cp{i}",{{scale:1.35}},{{scale:1,duration:.18,ease:"power3.out"}},{t0:.3f});')
             return
         glow = f"0 0 30px {T['glow']}aa," if style == 'glass' else ''
-        kcol = '#fff' if style == 'glass' else T['accent']
+        kcol = '#fff' if style == 'glass' else self.lit()
         c.css.append(f'''.cp{{position:absolute;left:90px;width:900px;top:{top:.0f}px;text-align:center;visibility:hidden;
   font:{600 if style == 'glass' else 700} {size:.0f}px/1.08 'Inter';color:#fff;letter-spacing:-.025em;text-shadow:{glow}0 4px 18px rgba(0,0,0,.6)}}
 .cp .w{{display:inline-block;margin:0 .1em}}
@@ -739,7 +740,8 @@ tl.to(o,{{n:s.length,duration:{tdur:.3f},ease:"none",onUpdate:()=>{{el.textConte
                      f'<span id="{i}_{q}c" class="ico" style="width:58px;height:58px;border:2px solid rgba(255,255,255,.45)">'
                      f'<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">'
                      f'<path id="{i}_{q}k" d="M5 12.5l4.5 4.5L19 7" stroke-dasharray="24" stroke-dashoffset="24"/></svg></span></div>')
-        self.add(f'<div id="{i}" style="left:150px;top:{y:.0f}px;width:780px">{rows}</div>', z=35)
+        box = {'left': 'left:70px;width:560px', 'right': 'left:490px;width:540px'}.get(e.get('side'), 'left:150px;width:780px')
+        self.add(f'<div id="{i}" style="{box};top:{y:.0f}px">{rows}</div>', z=35)
         for q, k in enumerate(items[:4]):
             t = self.j.t(k.get('at'), at + q * .5)
             tick = self.j.t(k.get('done_at'), t + .35)
@@ -902,8 +904,8 @@ tl.to(o,{{n:s.length,duration:{tdur:.3f},ease:"none",onUpdate:()=>{{el.textConte
         at = self.j.t(e.get('at'), max(0, self.c.dur - 2.4))
         until = self.j.t(e.get('until')) if e.get('until') is not None else self.c.dur
         y = float(e.get('y', 960))
-        self.add(f'<div id="{i}" style="left:0;width:1080px;top:{y:.0f}px;text-align:center">'
-                 f'<div class="a" style="left:240px;top:-10px;width:600px;height:150px;border-radius:99px;background:radial-gradient(closest-side,{T["glow"]},transparent);filter:blur(30px)"></div>'
+        self.add(f'<div id="{i}" style="{self.band(e)};top:{y:.0f}px">'
+                 f'<div class="a" style="left:{"240px" if e.get("side", "center") == "center" else "0"};top:-10px;width:600px;height:150px;border-radius:99px;background:radial-gradient(closest-side,{T["glow"]},transparent);filter:blur(30px)"></div>'
                  f'<span class="pill" id="{i}p" style="position:relative;display:inline-flex;align-items:center;gap:18px;padding:26px 46px;border-radius:99px;'
                  f'font:600 54px Inter;letter-spacing:-.03em">{icon(e.get("icon", "message"), 46, 2.4)}<span>{serif(e.get("text", "Comment *EDIT*"))}</span></span>'
                  + (f'<div style="margin-top:22px;font:500 32px Inter;color:#fff;opacity:.85;text-shadow:0 2px 12px rgba(0,0,0,.6)">{esc(e["sub"])}</div>' if e.get('sub') else '')

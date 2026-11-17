@@ -81,6 +81,17 @@ def is_dark(hexc):
 
 
 class EditorialFX:
+    def band(self, e, default='center'):
+        """horizontal placement for a text block: side "center" (full width), "left" or "right" half, or x + w"""
+        side = e.get('side', default)
+        if 'x' in e:
+            return f'left:{float(e["x"]):.0f}px;width:{float(e.get("w", 520)):.0f}px;text-align:{e.get("align", "left")}'
+        if side == 'left':
+            return 'left:60px;width:520px;text-align:center'
+        if side == 'right':
+            return 'left:520px;width:520px;text-align:center'
+        return 'left:0;width:1080px;text-align:center'
+
     def lit(self):
         """the accent as it should glow on screen: a dark accent (navy) glows in its light tint"""
         return self.T['accent2'] if is_dark(self.T['accent']) else self.T['accent']
@@ -341,7 +352,7 @@ class EditorialFX:
                      f'background:{bgc};color:{fg};font:{"400 92px/1 Anton" if big else "700 48px/1.1 Inter"};letter-spacing:{".01em" if big else "-.01em"};'
                      f'border-radius:{6 if big else 14}px;transform:rotate({rot}deg);box-shadow:0 14px 34px rgba(0,0,0,.4)">'
                      f'{esc(upper(it["text"], self.j.get("lang")) if big else it["text"])}</span></div>')
-        self.add(f'<div id="{i}" style="left:0;width:1080px;top:{y:.0f}px;text-align:center">{rows}</div>', z=36)
+        self.add(f'<div id="{i}" style="{self.band(e)};top:{y:.0f}px">{rows}</div>', z=36)
         for k, it in enumerate(items[:4]):
             t = self.j.t(it.get('at'), at + k * .3)
             self.js(f'tl.fromTo("#{i}_{k}",{{autoAlpha:0,scale:.4}},{{autoAlpha:1,scale:1,duration:.42,ease:"back.out(2.4)"}},{t:.3f});')
