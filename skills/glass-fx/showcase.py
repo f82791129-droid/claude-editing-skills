@@ -17,7 +17,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'kit'))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from reel import Comp, FPS, duration, sheet  # noqa: E402
+import reel  # noqa: E402
+from reel import Comp, duration, sheet  # noqa: E402
 from build import THEMES, icon, serif  # noqa: E402
 
 
@@ -64,7 +65,8 @@ class Show:
             sys.exit(f'not found: {self.main}')
         j.clip = j.path(j.get('music')) if j.get('music') else self.main
         dur = float(j.get('duration') or min(12.0, duration(self.main)))
-        j.dur = math.floor(dur * FPS - 1) / FPS
+        reel.FPS = reel.pick_fps(self.main)
+        j.dur = math.floor(dur * reel.FPS - 1) / reel.FPS
         self.c = Comp(j, 'showcase')
         self.T = THEMES[j.get('theme', 'violet')]
 

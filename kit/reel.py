@@ -22,7 +22,7 @@ import sys
 from pathlib import Path
 
 KIT = Path(__file__).resolve().parent
-FPS = 30
+FPS = 30          # the render rate; Job switches it to the source's own rate (see pick_fps) so no frame is ever repeated
 W, H = 1080, 1920
 HYPERFRAMES = 'hyperframes@0.8.34'
 SAFE_TOP, SAFE_BOTTOM, SAFE_SIDE = 220, 1500, 100      # Instagram covers the top ~220 px and the bottom ~420 px
@@ -59,6 +59,22 @@ img{display:block}
 """
 
 
+def pick_fps(path):
+    """render at the footage's own frame rate: converting 25 -> 30 repeats every 5th frame, and that stutter reads as
+    the picture freezing. 50/60 render at half rate (same motion, half the render time)."""
+    try:
+        r = subprocess.check_output(['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=avg_frame_rate',
+                                     '-of', 'csv=p=0', str(path)]).decode().strip()
+        a, b = r.split('/')
+        f = float(a) / float(b)
+    except Exception:
+        return 30
+    for target in (24, 25, 30):
+        if abs(f - target) < .6 or abs(f - 2 * target) < 1.2:
+            return target
+    return 30
+
+
 def run(cmd, **kw):
     return subprocess.run([str(c) for c in cmd], check=True, **kw)
 
@@ -91,6 +107,8 @@ class Job:
         self.video = self.path(self.s['video'])
         if not self.video.exists():
             sys.exit(f'video not found: {self.video}')
+        global FPS
+        FPS = int(self.s.get('fps') or os.environ.get('REEL_FPS') or pick_fps(self.video))
         self.start = float(self.s.get('start', 0))
         self.end = float(self.s.get('end') or duration(self.video))
         self.out = self.path(self.s.get('out') or f'{self.video.stem}.{skill}.mp4')
@@ -170,7 +188,7 @@ class Job:
 def prep_clip(video, start, end, work):
     """the segment as a 1080x1920, 30 fps, frame-accurate clip (cached)"""
     out = work / 'clip.mp4'
-    key = json.dumps([str(video), os.path.getmtime(video), start, end])
+    key = json.dumps([str(video), os.path.getmtime(video), start, end, FPS])
     stamp = work / 'clip.key'
     if out.exists() and stamp.exists() and stamp.read_text() == key:
         return out
@@ -277,7 +295,10 @@ window.__timelines["main"] = tl;
         if out.exists():
             out.unlink()
         print(f'rendering {out.name} ...', flush=True)
-        r = subprocess.run(['npx', '--yes', HYPERFRAMES, 'render', str(self.dir), '-o', str(out), '--fps', str(FPS), '-q', os.environ.get('REEL_QUALITY', 'high')],
+        r = subprocess.run(['npx', '--yes', HYPERFRAMES, 'render', str(self.dir), '-o', str(out), '--fps', str(FPS), '-q', os.environ.get('REEL_QUALITY', 'high'),
+                            # PNG source frames: the default JPEG extraction puts block artifacts into the footage
+                            '--video-frame-format', os.environ.get('REEL_FRAME_FORMAT', 'png'),
+                            *(['--crf', os.environ.get('REEL_CRF', '14')] if os.environ.get('REEL_QUALITY', 'high') == 'high' else [])],
                            capture_output=True, text=True)
         if not out.exists():
             sys.exit(f'render failed:\n{r.stdout[-3000:]}\n{r.stderr[-3000:]}')

@@ -71,6 +71,13 @@ Transcripts: `GROQ_API_KEY`, or `bash "$KIT/setup.sh" --local-asr` once for loca
 - **`"voice": "mic"`** gives the voice a studio-microphone finish: de-noise (no hiss), low cut, warmth, presence, de-esser, compression, −14 LUFS. Use it for phone or room recordings, and whenever the user asks for a serious, "spoken into a microphone" sound.
 - **Sound palette:** `"sfx": {"palette": "clean"}` uses pure tones only (swipe, swell, chime, pop, soft sub) — zero noise, so no hiss. Use it whenever the user mentions hiss/xışıltı or wants it cleaner. `level`: `soft` (fewest), `medium`; `gap` is the minimum seconds between sounds.
 
+### Clean picture (no freezing, no blocks)
+- The reel renders at the footage's own frame rate (25 stays 25). Never force 30 on 25 fps footage: every 5th frame repeats and the picture seems to freeze. `fps` overrides only if the user asks.
+- Source frames are pulled as PNG and encoded at CRF 14, so the render adds no block artifacts of its own.
+- Phone and CapCut exports often already have blocks in smooth, out-of-focus backgrounds. `"deblock": true` cleans them lightly. With a cutout, `bg_soften` (3 px by default in `cinema`) softens only the background, which melts the blocks while the speaker stays sharp. Use 0 for none, 5–6 for a heavy case.
+- Avoid `grain` on such footage: noise compresses into blocks on Instagram. Contrast in `cinema` is kept gentle for the same reason.
+- When you hand over a file for upload, export it with `-c:v libx264 -preset slow -crf 16 -tune film -x264-params aq-mode=3 -movflags +faststart` (fewer blocks after Instagram recompresses it).
+
 ### Look
 - `look`: `cinema` (default here) or `glass` (the violet glass-fx look).
 - `theme`: `gold` (default), `lime`, `red`, `sky`, or the glass ones; `brand.accent` overrides with your own colour.

@@ -1,5 +1,5 @@
 {
-  "_about": "Şahlar bəy. PROVISIONAL: the look of the first podcast edit (navy, clean medium sound, studio-mic voice). The user will confirm or change the style after reviewing; update this file then.",
+  "_about": "Şahlar bəy. PROVISIONAL: the look of the first podcast edit (navy, clean medium sound, studio-mic voice, no grain, de-blocked footage, source frame rate). The user will confirm or change the style after reviewing; update this file then.",
   "lang": "az",
   "look": "cinema",
   "theme": "navy",
@@ -7,7 +7,15 @@
   "cutout": true,
   "trim_pauses": 0.35,
   "cut_zoom": 1.08,
-  "grain": 0.05,
-  "sfx": {"palette": "clean", "level": "medium", "gap": 0.6},
-  "captions": {"style": "editorial", "top": 1250}
+  "grain": 0,
+  "sfx": {
+    "palette": "clean",
+    "level": "medium",
+    "gap": 0.6
+  },
+  "captions": {
+    "style": "editorial",
+    "top": 1250
+  },
+  "deblock": true
 }

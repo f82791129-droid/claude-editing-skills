@@ -243,6 +243,8 @@ class EditorialFX:
             self.fx_transition({'kind': 'flash', 'at': at})
         else:
             self.js(f'tl.fromTo("#{i}",{{yPercent:105,rotation:4}},{{yPercent:0,rotation:0,duration:.55,ease:"expo.out"}},{at:.3f});')
+        # a full-screen card must never stand still: a held frame reads as the video freezing
+        self.js(f'tl.fromTo("#{i}",{{scale:1}},{{scale:1.06,duration:{max(.5, until - at):.3f},ease:"none"}},{at:.3f});')
         self.js(f'tl.fromTo("#{i} .{i}t",{{autoAlpha:0,scale:1.3,filter:"blur(16px)"}},{{autoAlpha:1,scale:1,filter:"blur(0px)",duration:.55,ease:"expo.out"}},{at + .2:.3f});')
         if photo:
             self.js(f'tl.fromTo("#{i} .{i}ph",{{autoAlpha:0,y:-400,rotation:-25}},{{autoAlpha:1,y:0,rotation:{float(e.get("photo_rot", -4))},duration:.6,ease:"back.out(1.4)"}},{at + .3:.3f});')

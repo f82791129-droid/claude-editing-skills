@@ -22,7 +22,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'kit'))
-from reel import FPS, Job, Comp, bare, count_js, duration, groups, load_words, parse_number, rich, run  # noqa: E402
+from reel import Job, Comp, bare, count_js, duration, groups, load_words, parse_number, rich, run  # noqa: E402
 import sfx  # noqa: E402
 from fx_editorial import EditorialFX, lower as lang_lower  # noqa: E402
 
@@ -138,7 +138,7 @@ def prep_media(spec_path):
     spec_path = Path(spec_path).resolve()
     s = json.loads(spec_path.read_text())
     clips, mic = s.get('clips'), s.get('voice') == 'mic'
-    if not clips and not mic:
+    if not clips and not mic and not s.get('deblock'):
         return spec_path
     base = spec_path.parent
     rel = lambda v: (Path(v).expanduser() if Path(v).expanduser().is_absolute() else (base / v)).resolve()  # noqa: E731
@@ -147,14 +147,17 @@ def prep_media(spec_path):
     work = base / '.work' / f'{spec_path.stem}.media'
     work.mkdir(parents=True, exist_ok=True)
     out = work / 'media.mp4'
-    key = json.dumps([[str(p), p.stat().st_mtime, a, b] for p, a, b in parts] + [mic])
+    key = json.dumps([[str(p), p.stat().st_mtime, a, b] for p, a, b in parts] + [mic, bool(s.get('deblock')), 2])
     if not (out.exists() and (work / 'key').exists() and (work / 'key').read_text() == key):
         args, f, cat = [], [], ''
+        fps = __import__('reel').pick_fps(parts[0][0])
+        # a light de-block + de-noise for phone / CapCut exports whose flat backgrounds break into blocks
+        clean = ',deblock=filter=strong:block=8,hqdn3d=1.5:1.5:4:4' if s.get('deblock') else ''
         for k, (p, a, b) in enumerate(parts):
             args += ['-i', p]
             tr = f'trim={a:.3f}' + (f':{b:.3f}' if b else '')
             atr = f'atrim={a:.3f}' + (f':{b:.3f}' if b else '')
-            f.append(f'[{k}:v]{tr},setpts=PTS-STARTPTS,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30,setsar=1[v{k}]')
+            f.append(f'[{k}:v]{tr},setpts=PTS-STARTPTS,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps={fps},setsar=1{clean}[v{k}]')
             f.append(f'[{k}:a]{atr},asetpts=PTS-STARTPTS,afade=t=in:d=0.015,aresample=48000[a{k}]')
             cat += f'[v{k}][a{k}]'
         f.append(f'{cat}concat=n={len(parts)}:v=1:a=1[v][araw]')
@@ -162,7 +165,7 @@ def prep_media(spec_path):
         run(['ffmpeg', '-v', 'error', '-y', *args, '-filter_complex', ';'.join(f), '-map', '[v]', '-map', '[a]',
              '-c:v', 'libx264', '-preset', 'fast', '-crf', '14', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '256k', out])
         (work / 'key').write_text(key)
-    s2 = {k: v for k, v in s.items() if k not in ('clips', 'voice')}
+    s2 = {k: v for k, v in s.items() if k not in ('clips', 'voice', 'deblock')}
     stem = (parts[0][0].stem if not clips else spec_path.stem.split('.')[0])
     s2.setdefault('out', str(rel(s.get('out') or f'{stem}.{spec_path.stem.split(".")[-1]}.mp4')))
     s2['video'] = str(out)
@@ -320,14 +323,18 @@ class Reel(EditorialFX):
         c.css.append("@font-face{font-family:'Anton';src:url(fonts/anton-400-normal.woff2) format('woff2')}"
                      f"@font-face{{font-family:'Anton';src:url(fonts/anton-latin-ext-400-normal.woff2) format('woff2');{ext}}}")
         grade = ('saturate(1.08) contrast(1.06) brightness(.93)' if self.look == 'glass'
-                 else 'saturate(1.12) contrast(1.12) brightness(.95) sepia(.06)')
+                 else 'saturate(1.08) contrast(1.05) brightness(.97) sepia(.04)')
         self.grade = grade
+        # with a cutout the (already out-of-focus) background can be softened a touch: it melts compression blocks
+        # away while the speaker stays fully sharp on top
+        soft = float(j.get('bg_soften', 3 if (self.cut and self.look == 'cinema') else 0))
+        self.bg_filter = f'{grade} blur({soft:.1f}px)'
         # the camera: the take, slowly pushed in, with punch-ins on words
         z = j.get('zoom', 1.06)
         c.body.append(f'<div id="cam" data-z="1" style="left:0;top:0;width:1080px;height:1920px;transform-origin:540px {self.eye:.0f}px">'
                       + f'<div class="zz" style="position:absolute;inset:0;transform-origin:540px {self.eye:.0f}px">'
                       + c.video(j.clip, 'position:absolute;left:0;top:0;width:1080px;height:1920px;'
-                                f'filter:{grade}', 'bg') + '</div></div>')
+                                f'filter:{self.bg_filter}', 'bg') + '</div></div>')
         if self.cut:
             c.body.append(f'<div id="cutw" data-z="20" style="left:0;top:0;width:1080px;height:1920px;transform-origin:540px {self.eye:.0f}px">'
                           + f'<div class="zz" style="position:absolute;inset:0;transform-origin:540px {self.eye:.0f}px">'
@@ -837,7 +844,7 @@ tl.to(o,{{n:s.length,duration:{tdur:.3f},ease:"none",onUpdate:()=>{{el.textConte
         T, i = self.T, self.uid('df')
         at, until = self.window(e, 2.4)
         until = min(max(until, at + 1.6), self.c.dur - .05)      # a focus pull needs time to read
-        base = f'{self.grade} blur(0px)'
+        base = self.bg_filter
         deep = f'saturate(.9) contrast(1.06) brightness(.55) blur({float(e.get("blur", 18)):.0f}px)' if self.cut else 'saturate(.95) contrast(1.08) brightness(.72) blur(0px)'
         self.js(f'tl.fromTo("#bg",{{filter:"{base}"}},{{filter:"{deep}",duration:.6,ease:"power2.out"}},{at:.3f});')
         if until < self.c.dur - .06:
