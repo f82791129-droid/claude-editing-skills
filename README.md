@@ -1,6 +1,6 @@
 # Claude editing skills
 
-Twelve skills for Claude Code: seven workflows that edit your talking-head clips around your words, plus five photographic styles with editable templates and included image assets. Rendering happens on your own computer.
+Thirteen skills for Claude Code: eight workflows that edit your talking-head clips around your words, plus five photographic styles with editable templates and included image assets. Rendering happens on your own computer.
 
 ![The six skills, one frame each](docs/skills.jpg)
 
@@ -12,6 +12,7 @@ Twelve skills for Claude Code: seven workflows that edit your talking-head clips
 | `/split-screen` | **The classic half-and-half.** A step badge, a serif headline and a window showing the step on top, you on the bottom, and captions on the seam. |
 | `/ranking-list` | **A tier list on your chest.** Each item pops up when you name it and drops into its tier (S to F) on the verdict. |
 | `/storytelling` | **Three image cards, a title and a subtitle**, all landing together over one continuous take, with simple TikTok-style captions. |
+| [`/viral-edit`](skills/viral-edit/SKILL.md) | **The creator edit.** Natural cinematic colour, pauses trimmed with alternating jump-cut zooms, a black-and-white-to-colour hook, huge words behind your head (with a serif word in front, or a number counting up), halo rings and light rays, paper and grid B-roll cards with taped photos and hand-drawn circles, colour label boxes, chat bubbles, dot shapes, flash, pixel and whip cuts, and soft sound. Works in Azerbaijani, Turkish and Uzbek too. |
 | [`/glass-fx`](skills/glass-fx/SKILL.md) | **The premium glass look.** A violet (or teal, rose, silver) grade with floating spheres, captions whose key words turn serif italic, and twelve effects that land on your words: halo search with a cursor click, ribbon wrap, falling cards, social orbit, quote note, icon pop, typing search, film strip, chrome title, glass card, checklist and a full-screen takeover. It also makes the promo video around your reels ("12 video effects", before/after with a terminal prompt). |
 
 ## Five new photographic styles
@@ -69,6 +70,7 @@ Open Claude Code anywhere and point it at a clip:
 /trial-reels ~/Downloads/my-reel.mp4 use the hook
 /behind-the-person ~/Downloads/clip.mp4, my posts are in ~/Desktop/posts
 /glass-fx ~/Downloads/talk.mp4 make it look like the purple glass reels
+/viral-edit ~/Downloads/talk.mp4 dili azərbaycanca, qızılı rəng
 ```
 
 The original six skills follow these five steps:

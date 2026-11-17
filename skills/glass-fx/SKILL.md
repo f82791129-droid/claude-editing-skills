@@ -74,6 +74,23 @@ Transcripts: `GROQ_API_KEY` (free, fastest). Without it the kit falls back to a 
 | `glass_card` | frosted panel: title (serif accent), sub line, tiny input bar | a claim, a definition | `title`, `sub`, `bar`, `bar_icon`, `side: left\|right\|center`, `y` |
 | `checklist` | numbered glass rows that tick off as said | steps, "three things" | `items: [{text, at, done_at}]`, `y` |
 
+### Premium beats
+| type | what it is | fields |
+|---|---|---|
+| `hook` | the first second: a two-line title rises out of a mask while the camera settles from a push, with a light leak | `text` (`\n` between lines, `*word*` serif), `kicker`, `zoom_from`, `y` |
+| `depth_focus` | the room blurs and darkens, the speaker stays sharp (needs `cutout`); an optional glowing serif word behind them | `text`, `blur`, `size`, `y` |
+| `stat` | a number counts up in a glass card | `value` (`"10,000"`, `"4:12"`), `label`, `sub`, `prefix`, `suffix`, `count_for` |
+| `name_tag` | glass pill: avatar, name, verified tick, handle (defaults from `brand`) | `name`, `handle`, `avatar`, `y` |
+| `cta` | the ask at the end: a glowing pill that breathes twice | `text` (`"Comment *EDIT*"`), `sub`, `icon`, `y` |
+| `light_leak` | a soft light sweep | `for`, `side` |
+
+### Pacing, brand and sound
+- `trim_pauses: 0.4` cuts every silence longer than 0.4 s (or give `segments: [[a, b], …]` in source seconds); the framing alternates on each cut (`cut_zoom`, 1.1). Words and effects follow the new timing.
+- `brand: {"accent": "#4f7cff", "name": "…", "handle": "@…", "avatar": "me.jpg"}` derives every tone from your colour.
+- `sfx`: `"soft"` (default) — synthesized, quiet sounds on the main beats only, at most one per 0.8 s; `"medium"`, `"off"`, or `{"level": "soft", "gap": 1.2}`. Any effect can take `"sfx": false`. `music: {"src": "bed.mp3", "volume": 0.1}` adds the user's own track. Audition the sounds with `"$PY" "$SKILL_DIR/sfx.py" preview out.wav`.
+- `grain: 0.07` film grain (0 to turn off). `lang: "az"` for Azerbaijani capitals (i → İ).
+- For the creator / After-Effects style (natural colour, words behind the head, paper B-roll …) use `/viral-edit`, which runs on this engine.
+
 Every effect takes `at` and either `until` or `hold` (seconds, default ≈ 2.8). Icons: `check eye heart star bolt user users search plus chart clock calendar arrow play message money lock fire sparkle instagram youtube tiktok x linkedin mail`. In any text, `*word*` turns that word serif italic.
 
 ### Look

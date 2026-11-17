@@ -63,6 +63,7 @@ def transcribe_local(video, out, language=None):
 
 
 def transcribe(video, out=None, language=None):
+    language = language or os.environ.get('REEL_LANG') or None     # a skill passes the spec's "lang" this way
     if not os.environ.get('GROQ_API_KEY'):
         try:
             import faster_whisper  # noqa: F401

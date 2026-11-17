@@ -106,8 +106,57 @@ def typing(chars=8, d=.8):
     return out
 
 
+def scratch(d=.55):
+    """a soft marker stroke on paper"""
+    n = int(d * SR)
+    t = np.arange(n) / SR
+    x = lowpass(noise(n), 2600) - lowpass(noise(n), 700) * .5
+    am = .55 + .45 * np.sin(2 * np.pi * 9 * t) ** 2
+    return x * am * env(n, .04, .12)
+
+
+# ---- the "clean" palette: pure tones only, no noise anywhere (no hiss, no air) ----
+def tick_clean():
+    n = int(.06 * SR)
+    t = np.arange(n) / SR
+    return (np.sin(2 * np.pi * 1760 * t) + .4 * np.sin(2 * np.pi * 3520 * t)) * np.exp(-t * 70) * env(n, .002, .05) * .3
+
+
+def swipe(d=.32):
+    """a soft tonal swipe: two sines gliding up an octave, fast in, slow out"""
+    n = int(d * SR)
+    t = np.linspace(0, 1, n)
+    f = 380 * 2 ** (t * 1.0)
+    ph = 2 * np.pi * np.cumsum(f) / SR
+    x = np.sin(ph) + .35 * np.sin(2 * ph) + .2 * np.sin(1.5 * ph)
+    return x * np.sin(np.pi * t) ** 1.6 * .5
+
+
+def swell(d=.9):
+    """a rising tone pad into a moment (a clean riser)"""
+    n = int(d * SR)
+    t = np.linspace(0, 1, n)
+    x = np.zeros(n)
+    for f0, a in ((220, .5), (330, .35), (440, .3), (660, .15)):
+        f = f0 * 2 ** (t * .6)
+        x += a * np.sin(2 * np.pi * np.cumsum(f) / SR)
+    return x * t ** 2.2 * env(n, .01, .05)
+
+
+def chime():
+    """one soft bell note (a clean accent for numbers, checks and asks)"""
+    n = int(.9 * SR)
+    t = np.arange(n) / SR
+    x = sum(a * np.sin(2 * np.pi * f * t) * np.exp(-t * dcy) for f, a, dcy in ((1046.5, .6, 4), (2093, .25, 6), (3136, .1, 9)))
+    return x * env(n, .004, .5, 1.2)
+
+
+CLEAN = {'whoosh': 'swipe', 'rise': 'swell', 'scratch': 'tick_clean', 'tick': 'tick_clean', 'typing': 'tick_clean', 'shimmer': 'chime'}
+
+
 SOUNDS = {
-    'whoosh': whoosh, 'pop': pop, 'tick': tick, 'shimmer': shimmer, 'rise': rise, 'sub': sub, 'typing': typing,
+    'whoosh': whoosh, 'pop': pop, 'tick': tick, 'shimmer': shimmer, 'rise': rise, 'sub': sub, 'typing': typing, 'scratch': scratch,
+    'tick_clean': tick_clean, 'swipe': swipe, 'swell': swell, 'chime': chime,
 }
 
 # what each effect sounds like: [(sound, offset from the effect's time, priority, gain)]
@@ -130,16 +179,31 @@ CUES = {
     'name_tag': [('whoosh', -.05, 1, .5)],
     'cta': [('pop', 0, 2, .9), ('shimmer', .15, 1, .5)],
     'light_leak': [('whoosh', 0, 1, .5)],
+    'word_behind': [('sub', 0, 3, .9), ('whoosh', -.05, 1, .5)],
+    'halo_ring': [('shimmer', 0, 2, .7)],
+    'light_rays': [('rise', -.6, 2, .6), ('shimmer', 0, 1, .6)],
+    'paper_card': [('whoosh', -.05, 3, .9), ('scratch', .7, 1, .8)],
+    'polaroids': [('whoosh', 0, 2, .6), ('pop', .45, 1, .5)],
+    'scribble': [('scratch', 0, 2, 1.0)],
+    'label_box': [('pop', 0, 2, .8)],
+    'bubble': [('pop', 0, 2, .9)],
+    'star_rating': [('shimmer', .3, 2, .8)],
+    'dot_shape': [('rise', -.5, 2, .6), ('shimmer', .3, 1, .6)],
+    'transition': [('whoosh', -.08, 2, .8)],
 }
 
 LEVELS = {'off': 0.0, 'soft': .32, 'medium': .55}
 # every sound is levelled to its own peak, so a whoosh never shouts over a tick
-PEAK = {'whoosh': .42, 'rise': .36, 'pop': .5, 'tick': .28, 'shimmer': .3, 'sub': .62, 'typing': .26}
+PEAK = {'whoosh': .42, 'rise': .36, 'pop': .5, 'tick': .28, 'shimmer': .3, 'sub': .62, 'typing': .26, 'scratch': .22,
+        'tick_clean': .3, 'swipe': .34, 'swell': .3, 'chime': .32}
 
 
-def mix(events, dur, out, level='soft', gap=.8):
-    """events: [(time, sound, priority, gain)]. Keeps the strongest event in any `gap` window, writes a wav."""
+def mix(events, dur, out, level='soft', gap=.8, palette='soft'):
+    """events: [(time, sound, priority, gain)]. Keeps the strongest event in any `gap` window, writes a wav.
+    palette "clean" swaps every noise-based sound for a pure-tone one (no hiss at all)."""
     vol = LEVELS.get(level, level if isinstance(level, (int, float)) else .32)
+    if palette == 'clean':
+        events = [(t, CLEAN.get(n, n), p, g) for t, n, p, g in events]
     kept = []
     for ev in sorted(events, key=lambda e: (-e[2], e[0])):
         if 0 <= ev[0] < dur and all(abs(ev[0] - k[0]) >= gap for k in kept):

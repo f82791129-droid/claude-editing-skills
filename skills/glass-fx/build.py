@@ -24,13 +24,21 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'kit'))
 from reel import FPS, Job, Comp, bare, count_js, duration, groups, load_words, parse_number, rich, run  # noqa: E402
 import sfx  # noqa: E402
+from fx_editorial import EditorialFX, lower as lang_lower  # noqa: E402
 
 THEMES = {
     'violet': dict(accent='#8b5cf6', accent2='#c4b5fd', deep='#140630', mid='#3b1d8f', glow='#a78bfa', ink='#1b1035'),
     'teal':   dict(accent='#22d3ee', accent2='#a5f3fc', deep='#031821', mid='#0e5a73', glow='#67e8f9', ink='#062430'),
     'ember':  dict(accent='#fb7185', accent2='#fecdd3', deep='#1f0610', mid='#7f1d3a', glow='#fda4af', ink='#2a0a14'),
     'mono':   dict(accent='#a1a1aa', accent2='#f4f4f5', deep='#09090b', mid='#3f3f46', glow='#e4e4e7', ink='#18181b'),
+    # editorial accents on near-black, for look "cinema"
+    'gold':   dict(accent='#ffc533', accent2='#ffe7a3', deep='#0b0906', mid='#3a2c0c', glow='#ffd56b', ink='#1a1405'),
+    'lime':   dict(accent='#c8f560', accent2='#e9fbbf', deep='#070a04', mid='#2c3a10', glow='#d8ff7a', ink='#141c05'),
+    'red':    dict(accent='#ff3b30', accent2='#ffb3ad', deep='#0b0505', mid='#3d0f0c', glow='#ff6a61', ink='#1f0605'),
+    'navy':   dict(accent='#1f4fd6', accent2='#9cc0ff', deep='#030817', mid='#0a2160', glow='#3d7bff', ink='#020a24'),
+    'sky':    dict(accent='#3fa9ff', accent2='#bfe2ff', deep='#04080d', mid='#0e3156', glow='#7cc4ff', ink='#06182b'),
 }
+LOOK_THEME = {'glass': 'violet', 'cinema': 'gold'}
 
 ICONS = {
     'check': '<path d="M5 12.5l4.5 4.5L19 7"/>',
@@ -96,6 +104,75 @@ def brand_theme(T, brand):
         sys.exit('brand.accent must look like "#8b5cf6"')
     return dict(accent=acc, accent2=mixc(acc, '#ffffff', .55), glow=mixc(acc, '#ffffff', .3),
                 deep=mixc(acc, '#000000', .88), mid=mixc(acc, '#000000', .55), ink=mixc(acc, '#000000', .82))
+
+
+MIC_CHAIN = ('highpass=f=75,afftdn=nr=14:nf=-38:tn=1,equalizer=f=110:t=q:w=1.1:g=2.5,equalizer=f=320:t=q:w=1.3:g=-2.5,'
+             'equalizer=f=3200:t=q:w=1.2:g=3,equalizer=f=7000:t=q:w=1:g=-1.5,deesser=i=0.35,'
+             'acompressor=threshold=-24dB:ratio=3.2:attack=6:release=140:makeup=3,loudnorm=I=-14:TP=-1.5:LRA=7,aresample=48000')
+
+
+def apply_preset(spec_path, skill_dir):
+    """"preset": "name" merges <skill>/presets/name.json under the spec (the spec wins); effects are never preset"""
+    spec_path = Path(spec_path).resolve()
+    s = json.loads(spec_path.read_text())
+    name = s.get('preset')
+    if not name:
+        return spec_path
+    pf = Path(skill_dir) / 'presets' / f'{name}.json'
+    if not pf.exists():
+        sys.exit(f'preset "{name}" not found in {pf.parent} (have: {", ".join(p.stem for p in pf.parent.glob("*.json"))})')
+    base = {k: v for k, v in json.loads(pf.read_text()).items() if not k.startswith('_')}
+    merged = {**base, **{k: v for k, v in s.items() if k != 'preset'}}
+    for k in ('sfx', 'captions', 'brand'):
+        if isinstance(base.get(k), dict) and isinstance(s.get(k), dict):
+            merged[k] = {**base[k], **s[k]}
+    out = spec_path.with_name(f'.{spec_path.stem}.preset.json')
+    out.write_text(json.dumps(merged, indent=1, ensure_ascii=False))
+    print(f'preset: {name}')
+    return out
+
+
+def prep_media(spec_path):
+    """"clips": [["a.mp4", start, end], ["b.mp4"]] joins several takes into one; "voice": "mic" gives the voice a
+    studio-mic finish (de-noise, low cut, warmth, presence, de-ess, compression, -14 LUFS)."""
+    spec_path = Path(spec_path).resolve()
+    s = json.loads(spec_path.read_text())
+    clips, mic = s.get('clips'), s.get('voice') == 'mic'
+    if not clips and not mic:
+        return spec_path
+    base = spec_path.parent
+    rel = lambda v: (Path(v).expanduser() if Path(v).expanduser().is_absolute() else (base / v)).resolve()  # noqa: E731
+    parts = [(rel(c[0]), float(c[1]) if len(c) > 1 else 0.0, float(c[2]) if len(c) > 2 else None) for c in clips] if clips else \
+        [(rel(s['video']), 0.0, None)]
+    work = base / '.work' / f'{spec_path.stem}.media'
+    work.mkdir(parents=True, exist_ok=True)
+    out = work / 'media.mp4'
+    key = json.dumps([[str(p), p.stat().st_mtime, a, b] for p, a, b in parts] + [mic])
+    if not (out.exists() and (work / 'key').exists() and (work / 'key').read_text() == key):
+        args, f, cat = [], [], ''
+        for k, (p, a, b) in enumerate(parts):
+            args += ['-i', p]
+            tr = f'trim={a:.3f}' + (f':{b:.3f}' if b else '')
+            atr = f'atrim={a:.3f}' + (f':{b:.3f}' if b else '')
+            f.append(f'[{k}:v]{tr},setpts=PTS-STARTPTS,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30,setsar=1[v{k}]')
+            f.append(f'[{k}:a]{atr},asetpts=PTS-STARTPTS,afade=t=in:d=0.015,aresample=48000[a{k}]')
+            cat += f'[v{k}][a{k}]'
+        f.append(f'{cat}concat=n={len(parts)}:v=1:a=1[v][araw]')
+        f.append(f'[araw]{MIC_CHAIN if mic else "anull"}[a]')
+        run(['ffmpeg', '-v', 'error', '-y', *args, '-filter_complex', ';'.join(f), '-map', '[v]', '-map', '[a]',
+             '-c:v', 'libx264', '-preset', 'fast', '-crf', '14', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '256k', out])
+        (work / 'key').write_text(key)
+    s2 = {k: v for k, v in s.items() if k not in ('clips', 'voice')}
+    stem = (parts[0][0].stem if not clips else spec_path.stem.split('.')[0])
+    s2.setdefault('out', str(rel(s.get('out') or f'{stem}.{spec_path.stem.split(".")[-1]}.mp4')))
+    s2['video'] = str(out)
+    if clips:
+        s2.pop('start', None)
+        s2.pop('end', None)
+    mp = spec_path.with_name(f'.{spec_path.stem}.media.json')
+    mp.write_text(json.dumps(s2, indent=1, ensure_ascii=False))
+    print(f'media: {len(parts)} clip(s){", mic voice" if mic else ""}')
+    return mp
 
 
 def tighten(spec_path):
@@ -171,17 +248,21 @@ def tighten(spec_path):
     return tight, cuts
 
 
-class Reel:
-    def __init__(self, spec, cuts=()):
-        self.j = j = Job(spec, 'glass-fx')
+class Reel(EditorialFX):
+    def __init__(self, spec, cuts=(), skill='glass-fx', look='glass'):
+        self.j = j = Job(spec, skill)
         self.c = c = Comp(j)
+        self.look = j.get('look', look)
+        if self.look not in LOOK_THEME:
+            sys.exit('look must be glass or cinema')
         self.cuts = list(cuts) or list(j.get('__cuts') or [])
-        self.T = THEMES.get(j.get('theme', 'violet'))
+        self.T = THEMES.get(j.get('theme', LOOK_THEME[self.look]))
         if not self.T:
             sys.exit(f'theme must be one of {", ".join(THEMES)}')
         self.brand = j.get('brand') or {}
         self.T = brand_theme(self.T, self.brand)
         self.eye = float(j.get('eye_y', 760))
+        self.hx = float(j.get('head_x', 540))          # x of the head centre, for rings and light behind it
         self.n = 0
         self.cut = None
         cv = j.get('cutout', False)
@@ -235,18 +316,23 @@ class Reel:
   background:linear-gradient(180deg,#ffffff 0%,#e9e9f1 30%,#8c8c9c 49%,#4b4b58 52%,#d6d6e0 66%,#ffffff 82%,#9d9dac 100%);
   background-size:100% 100%;-webkit-background-clip:text;background-clip:text}}
 ''')
-        c.css.append("@font-face{font-family:'Anton';src:url(fonts/anton-400-normal.woff2) format('woff2')}")
+        ext = 'unicode-range:U+0100-02AF,U+0304,U+0308,U+0329,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF'
+        c.css.append("@font-face{font-family:'Anton';src:url(fonts/anton-400-normal.woff2) format('woff2')}"
+                     f"@font-face{{font-family:'Anton';src:url(fonts/anton-latin-ext-400-normal.woff2) format('woff2');{ext}}}")
+        grade = ('saturate(1.08) contrast(1.06) brightness(.93)' if self.look == 'glass'
+                 else 'saturate(1.12) contrast(1.12) brightness(.95) sepia(.06)')
+        self.grade = grade
         # the camera: the take, slowly pushed in, with punch-ins on words
         z = j.get('zoom', 1.06)
         c.body.append(f'<div id="cam" data-z="1" style="left:0;top:0;width:1080px;height:1920px;transform-origin:540px {self.eye:.0f}px">'
                       + f'<div class="zz" style="position:absolute;inset:0;transform-origin:540px {self.eye:.0f}px">'
                       + c.video(j.clip, 'position:absolute;left:0;top:0;width:1080px;height:1920px;'
-                                'filter:saturate(1.08) contrast(1.06) brightness(.93)', 'bg') + '</div></div>')
+                                f'filter:{grade}', 'bg') + '</div></div>')
         if self.cut:
             c.body.append(f'<div id="cutw" data-z="20" style="left:0;top:0;width:1080px;height:1920px;transform-origin:540px {self.eye:.0f}px">'
                           + f'<div class="zz" style="position:absolute;inset:0;transform-origin:540px {self.eye:.0f}px">'
                           + c.video(self.cut, 'position:absolute;left:0;top:0;width:1080px;height:1920px;'
-                                    'filter:saturate(1.08) contrast(1.06) brightness(.93)', 'cut') + '</div></div>')
+                                    f'filter:{grade}', 'cut') + '</div></div>')
         # jump cuts read as intentional when the framing alternates on every cut
         for k, t in enumerate(self.cuts):
             self.js(f'tl.set(".zz",{{scale:{1.0 if k % 2 else float(j.get("cut_zoom", 1.1))}}},{t:.3f});')
@@ -260,6 +346,12 @@ class Reel:
                 d = float(p.get('for', 1.2))
                 self.js(f'tl.to({cams},{{scale:{s},duration:.35,ease:"power3.out",overwrite:false}},{t:.3f});'
                         f'tl.to({cams},{{scale:{push},duration:.5,ease:"power2.inOut"}},{t + d:.3f});')
+        if self.look == 'cinema':
+            # natural colour, deep blacks, warm vignette: the speaker stays the hero
+            c.body.append('<div data-z="3" style="inset:0;background:linear-gradient(180deg,rgba(0,0,0,.55) 0%,rgba(0,0,0,0) 24%,'
+                          'rgba(0,0,0,0) 62%,rgba(0,0,0,.72) 100%)"></div>')
+            c.body.append('<div data-z="3" style="inset:0;background:radial-gradient(115% 75% at 50% 42%,transparent 50%,rgba(0,0,0,.6) 100%)"></div>')
+            return
         # the grade: colour cast, top and bottom fades, vignette
         c.body.append(f'<div data-z="3" style="inset:0;background:{T["accent"]};mix-blend-mode:color;opacity:.16"></div>')
         c.body.append(f'<div data-z="3" style="inset:0;background:linear-gradient(180deg,{T["deep"]}d0 0%,{T["deep"]}00 26%,'
@@ -284,14 +376,34 @@ class Reel:
         c, T = self.c, self.T
         top = float(cfg.get('top', 1240))
         size = float(cfg.get('size', 66))
-        keys = {bare(k) for k in cfg.get('keys', [])}
-        hide = [self.window(e) for e in self.j.get('effects', []) if e.get('type') == 'takeover' and e.get('text')]
+        lang = self.j.get('lang')
+        keys = {bare(lang_lower(k, lang)) for k in cfg.get('keys', [])}
+        hide = [self.window(e) for e in self.j.get('effects', []) if e.get('type') in ('takeover', 'paper_card') and (e.get('text') or e.get('type') == 'paper_card')]
+        style = cfg.get('style', 'glass' if self.look == 'glass' else 'editorial')
+        words = [(lang_lower(w, lang), a, b) for w, a, b in self.j.words]
+        if style == 'punch':                    # one word at a time, big condensed caps
+            c.css.append(f'''.cp{{position:absolute;left:60px;width:960px;top:{top - 30:.0f}px;text-align:center;visibility:hidden;
+  font:400 {size * 1.75:.0f}px/1 'Anton';color:#fff;text-transform:uppercase;letter-spacing:.01em;text-shadow:0 6px 24px rgba(0,0,0,.6)}}
+.cp .k{{color:{T['accent']}}}''')
+            for i, g in enumerate(groups(words, 1, 30)):
+                w, t = g[0]
+                nxt = groups(words, 1, 30)
+                t1 = nxt[i + 1][0][1] - .03 if i + 1 < len(nxt) else c.dur
+                t0 = max(0, t - .03)
+                if any(a <= t0 < b for a, b in hide):
+                    continue
+                c.body.append(f'<div class="cp" id="cp{i}" data-z="40"><span class="{"k" if w in keys else ""}">{esc(w.upper() if lang not in ("az", "tr") else w.replace("i", "İ").upper())}</span></div>')
+                self.js(f'tl.set("#cp{i}",{{visibility:"visible"}},{t0:.3f});tl.set("#cp{i}",{{visibility:"hidden"}},{t1:.3f});'
+                        f'tl.fromTo("#cp{i}",{{scale:1.35}},{{scale:1,duration:.18,ease:"power3.out"}},{t0:.3f});')
+            return
+        glow = f"0 0 30px {T['glow']}aa," if style == 'glass' else ''
+        kcol = '#fff' if style == 'glass' else T['accent']
         c.css.append(f'''.cp{{position:absolute;left:90px;width:900px;top:{top:.0f}px;text-align:center;visibility:hidden;
-  font:600 {size:.0f}px/1.08 'Inter';color:#fff;letter-spacing:-.025em;text-shadow:0 0 30px {T['glow']}aa,0 4px 18px rgba(0,0,0,.55)}}
+  font:{600 if style == 'glass' else 700} {size:.0f}px/1.08 'Inter';color:#fff;letter-spacing:-.025em;text-shadow:{glow}0 4px 18px rgba(0,0,0,.6)}}
 .cp .w{{display:inline-block;margin:0 .1em}}
 .cp .k{{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;font-size:1.22em;letter-spacing:-.01em;
-  color:#fff;text-shadow:0 0 34px {T['glow']},0 4px 18px rgba(0,0,0,.5)}}''')
-        gs = groups(self.j.words, int(cfg.get('maxw', 3)), int(cfg.get('maxc', 16)))
+  color:{kcol};text-shadow:{f"0 0 34px {T['glow']}," if style == 'glass' else ''}0 4px 18px rgba(0,0,0,.5)}}''')
+        gs = groups(words, int(cfg.get('maxw', 3)), int(cfg.get('maxc', 16)))
         for i, g in enumerate(gs):
             t0 = max(0, g[0][1] - 0.05)
             t1 = gs[i + 1][0][1] - 0.05 if i + 1 < len(gs) else c.dur
@@ -662,6 +774,7 @@ tl.to(o,{{n:s.length,duration:{tdur:.3f},ease:"none",onUpdate:()=>{{el.textConte
         if level in (False, 'off', None, 0):
             return
         gap = float(cfg.get('gap', .8)) if isinstance(cfg, dict) else .8
+        palette = cfg.get('palette', 'soft') if isinstance(cfg, dict) else 'soft'
         ev = []
         for e in self.j.get('effects') or []:
             t = e.get('type')
@@ -682,7 +795,7 @@ tl.to(o,{{n:s.length,duration:{tdur:.3f},ease:"none",onUpdate:()=>{{el.textConte
         for t in self.cuts[:: max(1, int(self.j.get('cut_sfx_every', 4)))] if self.j.get('cut_sfx', False) else []:
             ev.append((t, 'whoosh', 0, .35))
         out = self.j.work / 'sfx.wav'
-        kept = sfx.mix(ev, self.c.dur, out, level, gap)
+        kept = sfx.mix(ev, self.c.dur, out, level, gap, palette)
         print('sound:', ', '.join(f'{n}@{t}' for t, n in kept) or 'none')
         self.c.body.append(f'<audio id="sfxa" src="{self.c.asset(out)}" data-start="0" data-media-start="0" data-duration="{self.c.dur:.3f}" '
                            f'data-track-index="{self.c.nt()}" data-volume="1"></audio>')
@@ -701,7 +814,7 @@ tl.to(o,{{n:s.length,duration:{tdur:.3f},ease:"none",onUpdate:()=>{{el.textConte
         y = float(e.get('y', 300))
         lines = str(e.get('text', '')).split('\n')
         size = float(e.get('size', 96))
-        rows = ''.join(f'<div style="overflow:hidden;padding:0 10px .08em"><div class="{i}l" style="display:inline-block">{serif(l)}</div></div>' for l in lines)
+        rows = ''.join(f'<div style="overflow:hidden;padding:.16em 10px .2em;margin:-.16em 0 -.2em"><div class="{i}l" style="display:inline-block">{serif(l)}</div></div>' for l in lines)
         kick = (f'<div class="{i}k" style="margin-bottom:18px"><span class="pill" style="display:inline-block;padding:9px 20px;border-radius:99px;'
                 f'font:600 26px Inter;letter-spacing:.02em">{esc(e["kicker"])}</span></div>') if e.get('kicker') else ''
         self.add(f'<div id="{i}" style="left:60px;right:60px;top:{y:.0f}px;text-align:center;color:#fff;font:600 {size:.0f}px/1.0 Inter;'
@@ -724,7 +837,7 @@ tl.to(o,{{n:s.length,duration:{tdur:.3f},ease:"none",onUpdate:()=>{{el.textConte
         T, i = self.T, self.uid('df')
         at, until = self.window(e, 2.4)
         until = min(max(until, at + 1.6), self.c.dur - .05)      # a focus pull needs time to read
-        base = 'saturate(1.08) contrast(1.06) brightness(.93) blur(0px)'
+        base = f'{self.grade} blur(0px)'
         deep = f'saturate(.9) contrast(1.06) brightness(.55) blur({float(e.get("blur", 18)):.0f}px)' if self.cut else 'saturate(.95) contrast(1.08) brightness(.72) blur(0px)'
         self.js(f'tl.fromTo("#bg",{{filter:"{base}"}},{{filter:"{deep}",duration:.6,ease:"power2.out"}},{at:.3f});')
         if until < self.c.dur - .06:
@@ -820,8 +933,17 @@ tl.to(o,{{n:s.length,duration:{tdur:.3f},ease:"none",onUpdate:()=>{{el.textConte
         self.j.finish(self.c)
 
 
+def main(argv, skill='glass-fx', look='glass', doc=__doc__):
+    if len(argv) != 2:
+        sys.exit(doc)
+    skill_dir = Path(__file__).resolve().parent.parent / skill
+    spec = prep_media(apply_preset(argv[1], skill_dir))
+    lang = json.loads(Path(spec).read_text()).get('lang')
+    if lang:
+        __import__('os').environ.setdefault('REEL_LANG', lang)
+    spec, cuts = tighten(spec)
+    Reel(spec, cuts, skill, look).build()
+
+
 if __name__ == '__main__':
-    if len(sys.argv) != 2:
-        sys.exit(__doc__)
-    spec, cuts = tighten(sys.argv[1])
-    Reel(spec, cuts).build()
+    main(sys.argv)
