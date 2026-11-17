@@ -106,6 +106,9 @@ Transcripts: `GROQ_API_KEY`, or `bash "$KIT/setup.sh" --local-asr` once for loca
 Plus from glass-fx: `hook`, `depth_focus`, `stat`, `name_tag`, `cta`, `checklist`, `quote_note`, `typing_search`, `halo_search`, `takeover`, `ribbon_wrap`, `falling_cards`, `social_orbit`, `icon_pop`, `film_strip`, `chrome_title`, `glass_card`, `light_leak`.
 
 ## Taste
+- **Every reel opens on a hook in the first second**: a question or tension the rest of the reel answers ("Niyə 1 yox, 3 formula?"), big, in strong boxes (`label_box`, white line + one big accent line), placed where it covers neither face nor product — on tight framing that is the band between chin and product, with `"hide_captions": true` for those seconds. Pair it with the `hook` camera settle (`"text": ""` for camera + light only). A plain product name is not a hook.
+- **Nothing twice.** Cut any scene whose words repeat an earlier one, cut silent b-roll that carries no new information, and never show a box with the same words the captions are already showing. When several clips cover the same lines, keep the one with the better picture.
+- Cut the dead air at each clip's start and end by its real speech (`ffmpeg silencedetect`), not only by Whisper's first word time, which can be early.
 - Land everything on the word, never before it. The reel must read with the sound off.
 - One hero per beat. Big word, label box, ring, B-roll: one at a time, with air between.
 - Words on screen are the speaker's words or the user's facts. Never invent numbers, names, reviews or results.

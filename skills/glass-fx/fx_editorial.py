@@ -348,8 +348,9 @@ class EditorialFX:
             bgc, fg = styles.get(it.get('style', e.get('style', 'accent')), styles['accent'])
             rot = (-2.2, 1.6, -1.2, 2)[k]
             big = it.get('big', len(items) == 1)
-            rows += (f'<div style="margin-top:{0 if k == 0 else 14}px"><span id="{i}_{k}" style="display:inline-block;padding:{"14px 30px" if big else "10px 22px"};'
-                     f'background:{bgc};color:{fg};font:{"400 92px/1 Anton" if big else "700 48px/1.1 Inter"};letter-spacing:{".01em" if big else "-.01em"};'
+            fs = float(it.get('size') or (92 if big else 48))
+            rows += (f'<div style="margin-top:{0 if k == 0 else 14}px"><span id="{i}_{k}" style="display:inline-block;white-space:nowrap;padding:{"14px 30px" if big else "10px 22px"};'
+                     f'background:{bgc};color:{fg};font:{f"400 {fs:.0f}px/1 Anton" if big else f"700 {fs:.0f}px/1.1 Inter"};letter-spacing:{".01em" if big else "-.01em"};'
                      f'border-radius:{6 if big else 14}px;transform:rotate({rot}deg);box-shadow:0 14px 34px rgba(0,0,0,.4)">'
                      f'{esc(upper(it["text"], self.j.get("lang")) if big else it["text"])}</span></div>')
         self.add(f'<div id="{i}" style="{self.band(e)};top:{y:.0f}px">{rows}</div>', z=36)

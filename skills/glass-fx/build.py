@@ -386,7 +386,8 @@ class Reel(EditorialFX):
         size = float(cfg.get('size', 66))
         lang = self.j.get('lang')
         keys = {bare(lang_lower(k, lang)) for k in cfg.get('keys', [])}
-        hide = [self.window(e) for e in self.j.get('effects', []) if e.get('type') in ('takeover', 'paper_card') and (e.get('text') or e.get('type') == 'paper_card')]
+        hide = [self.window(e) for e in self.j.get('effects', []) if (e.get('type') in ('takeover', 'paper_card') and (e.get('text') or e.get('type') == 'paper_card'))
+                or e.get('hide_captions')]
         style = cfg.get('style', 'glass' if self.look == 'glass' else 'editorial')
         words = [(lang_lower(w, lang), a, b) for w, a, b in self.j.words]
         if style == 'punch':                    # one word at a time, big condensed caps
@@ -826,7 +827,8 @@ tl.to(o,{{n:s.length,duration:{tdur:.3f},ease:"none",onUpdate:()=>{{el.textConte
         rows = ''.join(f'<div style="overflow:hidden;padding:.16em 10px .2em;margin:-.16em 0 -.2em"><div class="{i}l" style="display:inline-block">{serif(l)}</div></div>' for l in lines)
         kick = (f'<div class="{i}k" style="margin-bottom:18px"><span class="pill" style="display:inline-block;padding:9px 20px;border-radius:99px;'
                 f'font:600 26px Inter;letter-spacing:.02em">{esc(e["kicker"])}</span></div>') if e.get('kicker') else ''
-        self.add(f'<div id="{i}" style="left:60px;right:60px;top:{y:.0f}px;text-align:center;color:#fff;font:600 {size:.0f}px/1.0 Inter;'
+        place = self.band(e) if (e.get('side') or 'x' in e) else 'left:60px;right:60px;text-align:center'
+        self.add(f'<div id="{i}" style="{place};top:{y:.0f}px;color:#fff;font:600 {size:.0f}px/1.0 Inter;'
                  f'letter-spacing:-.045em;text-shadow:0 0 50px {T["glow"]}99,0 6px 24px rgba(0,0,0,.5)">{kick}{rows}</div>', z=36)
         self.js(f'tl.fromTo(".{i}l",{{yPercent:115,rotation:5}},{{yPercent:0,rotation:0,duration:.75,stagger:.09,ease:"power4.out"}},{at + .05:.3f});')
         if kick:
