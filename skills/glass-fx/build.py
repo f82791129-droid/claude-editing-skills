@@ -17,11 +17,13 @@ Spec (see SKILL.md):
 import html
 import json
 import math
+import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'kit'))
-from reel import Job, Comp, bare, groups, rich  # noqa: E402
+from reel import FPS, Job, Comp, bare, count_js, duration, groups, load_words, parse_number, rich, run  # noqa: E402
+import sfx  # noqa: E402
 
 THEMES = {
     'violet': dict(accent='#8b5cf6', accent2='#c4b5fd', deep='#140630', mid='#3b1d8f', glow='#a78bfa', ink='#1b1035'),
@@ -79,13 +81,106 @@ def serif(s):
     return rich(s).replace('<em>', '<span class="sf">').replace('</em>', '</span>')
 
 
+def mixc(a, b, t):
+    """mix two #rrggbb colours"""
+    pa, pb = [int(a[i:i + 2], 16) for i in (1, 3, 5)], [int(b[i:i + 2], 16) for i in (1, 3, 5)]
+    return '#' + ''.join(f'{round(x + (y - x) * t):02x}' for x, y in zip(pa, pb))
+
+
+def brand_theme(T, brand):
+    """your own colour: one accent, every other tone derived from it"""
+    acc = (brand or {}).get('accent')
+    if not acc:
+        return T
+    if not (isinstance(acc, str) and len(acc) == 7 and acc.startswith('#')):
+        sys.exit('brand.accent must look like "#8b5cf6"')
+    return dict(accent=acc, accent2=mixc(acc, '#ffffff', .55), glow=mixc(acc, '#ffffff', .3),
+                deep=mixc(acc, '#000000', .88), mid=mixc(acc, '#000000', .55), ink=mixc(acc, '#000000', .82))
+
+
+def tighten(spec_path):
+    """trim_pauses / segments: cut the dead air out (viral pacing). Returns (spec to build, cut times in the new clip)."""
+    spec_path = Path(spec_path).resolve()
+    s = json.loads(spec_path.read_text())
+    if not s.get('trim_pauses') and not s.get('segments'):
+        return spec_path, []
+    base = spec_path.parent
+    rel = lambda v: (Path(v).expanduser() if Path(v).expanduser().is_absolute() else (base / v)).resolve()  # noqa: E731
+    video = rel(s['video'])
+    start = float(s.get('start', 0))
+    end = float(s.get('end') or duration(video))
+    tr = rel(s['transcript']) if s.get('transcript') else None
+    words = [(w, start + a, start + b) for w, a, b in load_words(video, start, end, tr)]
+    if s.get('segments'):
+        segs = [(float(a), float(b)) for a, b in s['segments']]
+    else:
+        thr = float(s['trim_pauses']) if not isinstance(s['trim_pauses'], bool) else .35
+        segs, a = [], max(start, words[0][1] - .08)
+        for k in range(len(words) - 1):
+            if words[k + 1][1] - words[k][2] > thr:
+                segs.append((a, min(end, words[k][2] + .12)))
+                a = words[k + 1][1] - .08
+        segs.append((a, min(end, words[-1][2] + .2)))
+    if len(segs) < 2:
+        return spec_path, []
+    work = base / '.work' / f'{video.stem}.tight'
+    work.mkdir(parents=True, exist_ok=True)
+    joined = work / 'joined.mp4'
+    key = json.dumps([str(video), video.stat().st_mtime, segs])
+    if not (joined.exists() and (work / 'key').exists() and (work / 'key').read_text() == key):
+        has_a = bool(subprocess.run(['ffprobe', '-v', 'error', '-select_streams', 'a', '-show_entries', 'stream=index', '-of', 'csv=p=0',
+                                     str(video)], capture_output=True, text=True).stdout.strip())
+        f, cat = [], ''
+        for k, (a, b) in enumerate(segs):
+            f.append(f'[0:v]trim={a:.3f}:{b:.3f},setpts=PTS-STARTPTS[v{k}]')
+            cat += f'[v{k}]'
+            if has_a:      # 12 ms fades at every cut, so the joins never click
+                f.append(f'[0:a]atrim={a:.3f}:{b:.3f},asetpts=PTS-STARTPTS,afade=t=in:d=0.012,afade=t=out:st={max(0, b - a - .02):.3f}:d=0.02[a{k}]')
+                cat += f'[a{k}]'
+        amap = ['-map', '[a]', '-c:a', 'aac', '-b:a', '192k'] if has_a else []
+        run(['ffmpeg', '-v', 'error', '-y', '-i', video, '-filter_complex',
+             ';'.join(f) + f';{cat}concat=n={len(segs)}:v=1:a={int(has_a)}[v]' + ('[a]' if has_a else ''),
+             '-map', '[v]', '-c:v', 'libx264', '-preset', 'fast', '-crf', '14', '-pix_fmt', 'yuv420p', *amap, joined])
+        (work / 'key').write_text(key)
+    out_words, cuts, off = [], [], 0.0
+    for k, (a, b) in enumerate(segs):
+        if k:
+            cuts.append(round(off, 3))
+        for w, ws, we in words:
+            if a - .01 <= ws < b:
+                out_words.append(dict(word=w, start=round(off + ws - a, 3), end=round(off + min(we, b) - a, 3)))
+        off += b - a
+    jt = work / 'joined.transcript.json'
+    jt.write_text(json.dumps(dict(words=out_words), ensure_ascii=False))
+    s2 = {k: v for k, v in s.items() if k not in ('trim_pauses', 'segments', 'start', 'end')}
+    if isinstance(s.get('cutout'), str):          # a ready alpha cutout must be cut exactly like the clip
+        src, jc = rel(s['cutout']), work / 'joined_cut.webm'
+        ckey = key + str(src.stat().st_mtime)
+        if not (jc.exists() and (work / 'ckey').exists() and (work / 'ckey').read_text() == ckey):
+            f = ''.join(f'[0:v]trim={a:.3f}:{b:.3f},setpts=PTS-STARTPTS[v{k}];' for k, (a, b) in enumerate(segs))
+            f += ''.join(f'[v{k}]' for k in range(len(segs))) + f'concat=n={len(segs)}:v=1:a=0,format=yuva420p[v]'
+            run(['ffmpeg', '-v', 'error', '-y', '-c:v', 'libvpx-vp9', '-i', src, '-filter_complex', f, '-map', '[v]',
+                 '-c:v', 'libvpx-vp9', '-pix_fmt', 'yuva420p', '-b:v', '4M', '-auto-alt-ref', '0', '-deadline', 'realtime', '-cpu-used', '8', jc])
+            (work / 'ckey').write_text(ckey)
+        s2['cutout'] = str(jc)
+    s2.update(video=str(joined), transcript=str(jt), out=str(rel(s.get('out') or f'{video.stem}.glass-fx.mp4')))
+    s2['__cuts'] = cuts
+    tight = base / f'.{spec_path.stem}.tight.json'
+    tight.write_text(json.dumps(s2, indent=1, ensure_ascii=False))
+    print(f'trimmed pauses: {len(segs)} pieces, {off:.1f}s of {end - start:.1f}s kept')
+    return tight, cuts
+
+
 class Reel:
-    def __init__(self, spec):
+    def __init__(self, spec, cuts=()):
         self.j = j = Job(spec, 'glass-fx')
         self.c = c = Comp(j)
+        self.cuts = list(cuts) or list(j.get('__cuts') or [])
         self.T = THEMES.get(j.get('theme', 'violet'))
         if not self.T:
             sys.exit(f'theme must be one of {", ".join(THEMES)}')
+        self.brand = j.get('brand') or {}
+        self.T = brand_theme(self.T, self.brand)
         self.eye = float(j.get('eye_y', 760))
         self.n = 0
         self.cut = None
@@ -144,12 +239,17 @@ class Reel:
         # the camera: the take, slowly pushed in, with punch-ins on words
         z = j.get('zoom', 1.06)
         c.body.append(f'<div id="cam" data-z="1" style="left:0;top:0;width:1080px;height:1920px;transform-origin:540px {self.eye:.0f}px">'
+                      + f'<div class="zz" style="position:absolute;inset:0;transform-origin:540px {self.eye:.0f}px">'
                       + c.video(j.clip, 'position:absolute;left:0;top:0;width:1080px;height:1920px;'
-                                'filter:saturate(1.08) contrast(1.06) brightness(.93)', 'bg') + '</div>')
+                                'filter:saturate(1.08) contrast(1.06) brightness(.93)', 'bg') + '</div></div>')
         if self.cut:
             c.body.append(f'<div id="cutw" data-z="20" style="left:0;top:0;width:1080px;height:1920px;transform-origin:540px {self.eye:.0f}px">'
+                          + f'<div class="zz" style="position:absolute;inset:0;transform-origin:540px {self.eye:.0f}px">'
                           + c.video(self.cut, 'position:absolute;left:0;top:0;width:1080px;height:1920px;'
-                                    'filter:saturate(1.08) contrast(1.06) brightness(.93)', 'cut') + '</div>')
+                                    'filter:saturate(1.08) contrast(1.06) brightness(.93)', 'cut') + '</div></div>')
+        # jump cuts read as intentional when the framing alternates on every cut
+        for k, t in enumerate(self.cuts):
+            self.js(f'tl.set(".zz",{{scale:{1.0 if k % 2 else float(j.get("cut_zoom", 1.1))}}},{t:.3f});')
         cams = '["#cam","#cutw"]' if self.cut else '"#cam"'
         push = z if isinstance(z, (int, float)) else 1.06
         self.js(f'tl.fromTo({cams},{{scale:1}},{{scale:{push},duration:{c.dur:.3f},ease:"none"}},0);')
@@ -466,7 +566,13 @@ tl.to(o,{{n:s.length,duration:{tdur:.3f},ease:"none",onUpdate:()=>{{el.textConte
         size = float(e.get('size') or min(330, 900 / max(1, len(word) * .5)))
         y = float(e.get('y', self.eye - size * .95))
         # the gradient goes on every letter: background-clip:text does not reach children that animate on their own layer
-        letters = ''.join(f'<span class="{i}c chrome" style="display:inline-block">{esc(ch) if ch != " " else "&nbsp;"}</span>' for ch in word)
+        cls = 'chrome' if e.get('style', 'chrome') == 'chrome' else 'sf'
+        if cls == 'sf':
+            word = str(e.get('text', ''))
+            size = float(e.get('size') or min(300, 1500 / max(1, len(word))))
+            y = float(e.get('y', self.eye - size * .85))
+        look = f';color:#fff;text-shadow:0 0 50px {self.T["glow"]}' if cls == 'sf' else ''
+        letters = ''.join(f'<span class="{i}c {cls}" style="display:inline-block{look}">{esc(ch) if ch != " " else "&nbsp;"}</span>' for ch in word)
         self.add(f'<div id="{i}" style="left:0;width:1080px;top:{y:.0f}px;text-align:center;filter:drop-shadow(0 12px 28px rgba(0,0,0,.6))">'
                  f'<div id="{i}w" style="display:inline-block;font-size:{size:.0f}px;line-height:.9">{letters}</div></div>', z=12 if self.cut else 31)
         self.js(f'tl.fromTo(".{i}c",{{autoAlpha:0,y:90,scale:1.35,filter:"blur(14px)"}},{{autoAlpha:1,y:0,scale:1,filter:"blur(0px)",duration:.55,stagger:.035,ease:"power3.out"}},{at:.3f});'
@@ -524,6 +630,169 @@ tl.to(o,{{n:s.length,duration:{tdur:.3f},ease:"none",onUpdate:()=>{{el.textConte
                     f'tl.to("#{i}_{q}k",{{strokeDashoffset:0,duration:.28,ease:"power2.out"}},{tick + .05:.3f});')
         self.leave(f'#{i}', until, after=at)
 
+    # ------------------------------------------------------------ finish: grain, light leaks, sound
+    def grain(self):
+        amt = self.j.get('grain', .07)
+        if not amt:
+            return
+        from PIL import Image
+        p = self.j.work / 'grain.png'
+        if not p.exists():
+            rng = __import__('numpy').random.default_rng(3)
+            a = (rng.random((256, 256)) * 255).astype('uint8')
+            Image.fromarray(a, 'L').convert('RGB').save(p)
+        self.c.body.append(f'<div id="grain" data-z="39" style="inset:-40px;background:url({self.c.asset(p)});mix-blend-mode:overlay;'
+                           f'opacity:{float(amt):.3f};pointer-events:none"></div>')
+        n = int(self.c.dur * 12)
+        self.js(f'tl.fromTo("#grain",{{backgroundPosition:"0px 0px"}},{{backgroundPosition:"{n * 137}px {n * 89}px",'
+                f'duration:{self.c.dur:.3f},ease:"steps({n})"}},0);')
+
+    def leak(self, at, d=1.0, side=1):
+        """a soft light leak sweeps across (screen blend)"""
+        T, i = self.T, self.uid('lk')
+        self.c.body.append(f'<div id="{i}" data-z="37" style="left:-500px;top:-200px;width:2080px;height:2320px;mix-blend-mode:screen;opacity:0;'
+                           f'background:radial-gradient(30% 22% at 35% 30%,{T["accent2"]}cc,transparent 70%),'
+                           f'radial-gradient(26% 30% at 62% 46%,#ffb48acc,transparent 70%),radial-gradient(40% 26% at 50% 70%,{T["accent"]}99,transparent 70%)"></div>')
+        self.js(f'tl.fromTo("#{i}",{{x:{-700 * side},rotation:{-12 * side},opacity:0}},{{x:{700 * side},rotation:{12 * side},duration:{d:.3f},ease:"power1.inOut"}},{at:.3f});'
+                f'tl.to("#{i}",{{opacity:.55,duration:{d * .4:.3f},ease:"sine.out"}},{at:.3f});tl.to("#{i}",{{opacity:0,duration:{d * .5:.3f},ease:"sine.in"}},{at + d * .5:.3f});')
+
+    def sound(self):
+        cfg = self.j.get('sfx', 'soft')
+        level = cfg.get('level', 'soft') if isinstance(cfg, dict) else cfg
+        if level in (False, 'off', None, 0):
+            return
+        gap = float(cfg.get('gap', .8)) if isinstance(cfg, dict) else .8
+        ev = []
+        for e in self.j.get('effects') or []:
+            t = e.get('type')
+            if e.get('sfx') is False:
+                continue
+            at = self.j.t(e.get('at', (e.get('items') or [{}])[0].get('at')), 0)
+            for name, off, pri, g in sfx.CUES.get(t, []):
+                if off == 'click':
+                    ev.append((self.j.t(e.get('click_at'), at + 1.05), name, pri, g))
+                elif off == 'items':
+                    for k, it in enumerate(e.get('items') or []):
+                        ti = self.j.t(it.get('at'), at + k * .5)
+                        ev.append((self.j.t(it.get('done_at'), ti + .35), name, pri, g))
+                elif off == 'end':
+                    ev.append((at + float(e.get('count_for', 1.2)), name, pri, g))
+                else:
+                    ev.append((at + off, name, pri, g))
+        for t in self.cuts[:: max(1, int(self.j.get('cut_sfx_every', 4)))] if self.j.get('cut_sfx', False) else []:
+            ev.append((t, 'whoosh', 0, .35))
+        out = self.j.work / 'sfx.wav'
+        kept = sfx.mix(ev, self.c.dur, out, level, gap)
+        print('sound:', ', '.join(f'{n}@{t}' for t, n in kept) or 'none')
+        self.c.body.append(f'<audio id="sfxa" src="{self.c.asset(out)}" data-start="0" data-media-start="0" data-duration="{self.c.dur:.3f}" '
+                           f'data-track-index="{self.c.nt()}" data-volume="1"></audio>')
+        m = self.j.get('music')
+        if m:
+            mp = self.j.path(m['src'] if isinstance(m, dict) else m)
+            vol = float(m.get('volume', .12)) if isinstance(m, dict) else .12
+            self.c.body.append(f'<audio id="mus" src="{self.c.asset(mp)}" data-start="0" data-media-start="{float(m.get("from", 0)) if isinstance(m, dict) else 0:.3f}" '
+                               f'data-duration="{min(self.c.dur, duration(mp)):.3f}" data-track-index="{self.c.nt()}" data-volume="{vol}"></audio>')
+
+    # ------------------------------------------------------------ premium effects
+    def fx_hook(self, e):
+        """the first second: a two-line title rises out of a mask while the camera settles from a push"""
+        T, i = self.T, self.uid('hk')
+        at, until = self.window({**e, 'at': e.get('at', 0)}, 2.0)
+        y = float(e.get('y', 300))
+        lines = str(e.get('text', '')).split('\n')
+        size = float(e.get('size', 96))
+        rows = ''.join(f'<div style="overflow:hidden;padding:0 10px .08em"><div class="{i}l" style="display:inline-block">{serif(l)}</div></div>' for l in lines)
+        kick = (f'<div class="{i}k" style="margin-bottom:18px"><span class="pill" style="display:inline-block;padding:9px 20px;border-radius:99px;'
+                f'font:600 26px Inter;letter-spacing:.02em">{esc(e["kicker"])}</span></div>') if e.get('kicker') else ''
+        self.add(f'<div id="{i}" style="left:60px;right:60px;top:{y:.0f}px;text-align:center;color:#fff;font:600 {size:.0f}px/1.0 Inter;'
+                 f'letter-spacing:-.045em;text-shadow:0 0 50px {T["glow"]}99,0 6px 24px rgba(0,0,0,.5)">{kick}{rows}</div>', z=36)
+        self.js(f'tl.fromTo(".{i}l",{{yPercent:115,rotation:5}},{{yPercent:0,rotation:0,duration:.75,stagger:.09,ease:"power4.out"}},{at + .05:.3f});')
+        if kick:
+            self.enter(f'.{i}k', at, 'y:-20,scale:.8', .45)
+        self.js(f'tl.fromTo(".zz",{{scale:{float(e.get("zoom_from", 1.22))}}},{{scale:1,duration:1.0,ease:"expo.out",'
+                f'immediateRender:{"true" if at < .05 else "false"}}},{at:.3f});')
+        if e.get('leak', True):
+            self.leak(at, 1.1)
+        self.leave(f'#{i}', until, after=at)
+
+    def fx_light_leak(self, e):
+        at = self.j.t(e.get('at'), 0)
+        self.leak(at, float(e.get('for', 1.0)), -1 if e.get('side') == 'left' else 1)
+
+    def fx_depth_focus(self, e):
+        """the room falls out of focus and darkens; the speaker (cutout) stays sharp; an optional word glows behind them"""
+        T, i = self.T, self.uid('df')
+        at, until = self.window(e, 2.4)
+        until = min(max(until, at + 1.6), self.c.dur - .05)      # a focus pull needs time to read
+        base = 'saturate(1.08) contrast(1.06) brightness(.93) blur(0px)'
+        deep = f'saturate(.9) contrast(1.06) brightness(.55) blur({float(e.get("blur", 18)):.0f}px)' if self.cut else 'saturate(.95) contrast(1.08) brightness(.72) blur(0px)'
+        self.js(f'tl.fromTo("#bg",{{filter:"{base}"}},{{filter:"{deep}",duration:.6,ease:"power2.out"}},{at:.3f});')
+        if until < self.c.dur - .06:
+            self.js(f'tl.to("#bg",{{filter:"{base}",duration:.5,ease:"power2.inOut"}},{until - .5:.3f});')
+        if e.get('text'):
+            word = str(e['text'])
+            size = float(e.get('size') or min(260, 1500 / max(1, len(word))))
+            self.add(f'<div id="{i}" style="left:0;width:1080px;top:{float(e.get("y", self.eye - size * .9)):.0f}px;text-align:center;'
+                     f'font:400 {size:.0f}px/1 \'Instrument Serif\';font-style:italic;color:#fff;letter-spacing:-.02em;'
+                     f'text-shadow:0 0 60px {T["glow"]},0 0 120px {T["accent"]}">{esc(word)}</div>', z=12 if self.cut else 31)
+            self.js(f'tl.fromTo("#{i}",{{autoAlpha:0,scale:1.3,filter:"blur(24px)"}},'
+                    f'{{autoAlpha:1,scale:1,filter:"blur(0px)",duration:.9,ease:"expo.out"}},{at + .1:.3f});')
+            self.leave(f'#{i}', until, after=at + .6)
+
+    def fx_stat(self, e):
+        """a number counts up in a glass card, with a glowing gradient"""
+        T, i = self.T, self.uid('st')
+        at, until = self.window(e, 2.6)
+        y = float(e.get('y', 300))
+        val = str(e.get('value', ''))
+        num = parse_number(val)
+        pre, suf = esc(e.get('prefix', '')), esc(e.get('suffix', ''))
+        self.add(f'<div id="{i}" class="gl" style="left:190px;top:{y:.0f}px;width:700px;border-radius:44px;padding:34px 36px 30px;color:#fff;text-align:center">'
+                 f'<div style="font:600 24px Inter;letter-spacing:.16em;text-transform:uppercase;opacity:.7">{esc(e.get("label", ""))}</div>'
+                 f'<div style="margin-top:6px;font:700 150px/1 Inter;letter-spacing:-.05em;background:linear-gradient(180deg,#fff 20%,{T["accent2"]});'
+                 f'-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 30px {T["glow"]}aa)">{pre}<span id="{i}n">{"0" if num else esc(val)}</span>{suf}</div>'
+                 + (f'<div style="margin-top:8px;font:400 40px \'Instrument Serif\';font-style:italic;opacity:.9">{esc(e["sub"])}</div>' if e.get('sub') else '')
+                 + '</div>', z=35)
+        self.enter(f'#{i}', at, 'y:40,scale:.85')
+        if num:
+            self.js(count_js([f'{i}n'], num[0], at + .15, dur=float(e.get('count_for', 1.2)), fmt=num[1]))
+        self.leave(f'#{i}', until, after=at)
+
+    def fx_name_tag(self, e):
+        """a glass name tag: avatar, name, verified tick, handle"""
+        T, i = self.T, self.uid('nt')
+        at, until = self.window(e, 3.0)
+        name = e.get('name') or self.brand.get('name', '')
+        handle = e.get('handle') or self.brand.get('handle', '')
+        img = (self.j.images(e.get('avatar') or self.brand.get('avatar')) or [None])[0] if (e.get('avatar') or self.brand.get('avatar')) else None
+        av = (f'background:url({self.c.asset(img)}) center/cover' if img else
+              f'background:radial-gradient(circle at 35% 30%,{T["accent2"]},{T["accent"]});font:700 36px Inter;color:#fff;display:flex;align-items:center;justify-content:center')
+        self.add(f'<div id="{i}" class="gl" style="left:100px;top:{float(e.get("y", 1060)):.0f}px;display:flex;align-items:center;gap:18px;'
+                 f'padding:14px 30px 14px 14px;border-radius:99px;color:#fff">'
+                 f'<div style="width:78px;height:78px;border-radius:50%;{av}">{"" if img else esc(name[:1].upper())}</div>'
+                 f'<div><div style="display:flex;align-items:center;gap:10px;font:700 34px Inter;letter-spacing:-.02em">{esc(name)}'
+                 f'<span class="ico" style="width:30px;height:30px;background:{T["accent"]}">{icon("check", 18, 3.2)}</span></div>'
+                 f'<div style="font:500 24px Inter;opacity:.7">{esc(handle)}</div></div></div>', z=35)
+        self.enter(f'#{i}', at, 'x:-120,scale:.9', .6, 'expo.out')
+        self.leave(f'#{i}', until, after=at)
+
+    def fx_cta(self, e):
+        """the ask at the end: a big glowing pill that breathes twice"""
+        T, i = self.T, self.uid('ca')
+        at = self.j.t(e.get('at'), max(0, self.c.dur - 2.4))
+        until = self.j.t(e.get('until')) if e.get('until') is not None else self.c.dur
+        y = float(e.get('y', 960))
+        self.add(f'<div id="{i}" style="left:0;width:1080px;top:{y:.0f}px;text-align:center">'
+                 f'<div class="a" style="left:240px;top:-10px;width:600px;height:150px;border-radius:99px;background:radial-gradient(closest-side,{T["glow"]},transparent);filter:blur(30px)"></div>'
+                 f'<span class="pill" id="{i}p" style="position:relative;display:inline-flex;align-items:center;gap:18px;padding:26px 46px;border-radius:99px;'
+                 f'font:600 54px Inter;letter-spacing:-.03em">{icon(e.get("icon", "message"), 46, 2.4)}<span>{serif(e.get("text", "Comment *EDIT*"))}</span></span>'
+                 + (f'<div style="margin-top:22px;font:500 32px Inter;color:#fff;opacity:.85;text-shadow:0 2px 12px rgba(0,0,0,.6)">{esc(e["sub"])}</div>' if e.get('sub') else '')
+                 + '</div>', z=38)
+        self.enter(f'#{i}', at, 'y:60,scale:.6', .6, 'back.out(1.8)')
+        for k in range(2):
+            self.js(f'tl.to("#{i}p",{{scale:1.06,duration:.35,ease:"sine.inOut",yoyo:true,repeat:1}},{at + .9 + k * 1.0:.3f});')
+        self.leave(f'#{i}', until, after=at)
+
     # ------------------------------------------------------------ build
     def build(self):
         self.base()
@@ -534,6 +803,8 @@ tl.to(o,{{n:s.length,duration:{tdur:.3f},ease:"none",onUpdate:()=>{{el.textConte
                 sys.exit(f'effect "{t}" is not one of: ' + ', '.join(k[3:] for k in dir(self) if k.startswith('fx_')))
             fn(e)
         self.captions()
+        self.grain()
+        self.sound()
         # z order: every top-level layer carries data-z
         out = []
         for b in self.c.body:
@@ -552,4 +823,5 @@ tl.to(o,{{n:s.length,duration:{tdur:.3f},ease:"none",onUpdate:()=>{{el.textConte
 if __name__ == '__main__':
     if len(sys.argv) != 2:
         sys.exit(__doc__)
-    Reel(sys.argv[1]).build()
+    spec, cuts = tighten(sys.argv[1])
+    Reel(spec, cuts).build()
