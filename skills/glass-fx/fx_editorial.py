@@ -76,7 +76,15 @@ def shape_mask(name, n=26):
     return [[1 if sm.getpixel((x, y)) > 110 else 0 for x in range(n)] for y in range(n)]
 
 
+def is_dark(hexc):
+    return sum(int(hexc[k:k + 2], 16) * w for k, w in ((1, .299), (3, .587), (5, .114))) < 140
+
+
 class EditorialFX:
+    def lit(self):
+        """the accent as it should glow on screen: a dark accent (navy) glows in its light tint"""
+        return self.T['accent2'] if is_dark(self.T['accent']) else self.T['accent']
+
     # ------------------------------------------------------------ big words
     def fx_word_behind(self, e):
         """a huge word behind the head (cutout), styles bold | chrome | serif | echo | outline, with an optional
@@ -91,7 +99,8 @@ class EditorialFX:
             size = float(e.get('size') or min(320, 1600 / max(1, len(word))))
         else:
             size = float(e.get('size') or min(360, 900 / max(1, len(word) * .5)))
-        y = float(e.get('y', self.eye - size * (.95 if style != 'echo' else 1.6)))
+        # high enough that the head covers only the bottom of the word: it reads, and it still sits behind
+        y = float(e.get('y', self.eye - size * (1.25 if style not in ('echo', 'serif') else (1.6 if style == 'echo' else .95))))
         z = 12 if self.cut else 31
         fam = {"serif": "'Instrument Serif',serif;font-style:italic;font-weight:400",
                }.get(style, "'Anton',sans-serif;font-weight:400")
@@ -136,7 +145,7 @@ class EditorialFX:
             fs = float(e.get('front_size', size * .5 if style != 'serif' else 120))
             fy = float(e.get('front_y', y + size * .62))
             self.add(f'<div id="{i}f" style="left:0;width:1080px;top:{fy:.0f}px;text-align:center;font:400 {fs:.0f}px/1 \'Instrument Serif\';'
-                     f'font-style:italic;color:{T["accent"]};text-shadow:0 6px 24px rgba(0,0,0,.55)">'
+                     f'font-style:italic;color:{e.get("front_color", self.lit())};text-shadow:0 6px 24px rgba(0,0,0,.6)">'
                      f'<span style="display:inline-block;transform:translateX({float(e.get("front_x", 120)):.0f}px)">{esc(e["front"])}</span></div>', z=36)
             fa = self.j.t(e.get('front_at'), at + .35)
             self.js(f'tl.fromTo("#{i}f",{{autoAlpha:0,scale:1.4,filter:"blur(14px)"}},{{autoAlpha:1,scale:1,filter:"blur(0px)",duration:.5,ease:"expo.out"}},{fa:.3f});')
@@ -155,7 +164,7 @@ class EditorialFX:
         at, until = self.window(e, 3.0)
         r = float(e.get('r', 270))
         cy = float(e.get('y', self.eye - 40))
-        col = T['accent'] if e.get('color', 'accent') == 'accent' else e['color']
+        col = self.lit() if e.get('color', 'accent') == 'accent' else e['color']
         parts = ''
         if e.get('rays', False) or e.get('type') == 'light_rays':
             parts += (f'<div id="{i}y" class="a" style="left:{self.hx - 1100:.0f}px;top:{cy - 1100:.0f}px;width:2200px;height:2200px;border-radius:50%;'
@@ -382,8 +391,8 @@ class EditorialFX:
         n = len(grid)
         size = float(e.get('size', 480))
         step = size / n
-        cx, cy = 540, float(e.get('y', 560))
-        col = self.T['accent'] if e.get('color', 'accent') == 'accent' else e['color']
+        cx, cy = float(e.get('x', 540)), float(e.get('y', 560))
+        col = self.lit() if e.get('color', 'accent') == 'accent' else e['color']
         rnd = random.Random(11)
         dots, js = [], []
         k = 0
@@ -398,7 +407,7 @@ class EditorialFX:
                 dist = math.hypot(x - cx, y - cy) / size
                 js.append(f'tl.fromTo("#{i}_{k}",{{x:{sx:.0f},y:{sy:.0f},autoAlpha:0,scale:.3}},{{x:0,y:0,autoAlpha:1,scale:1,duration:.7,ease:"expo.out"}},{at + dist * .5:.3f});')
                 k += 1
-        lab = (f'<div style="position:absolute;left:0;right:0;top:{cy + size / 2 + 30:.0f}px;text-align:center;font:600 46px Inter;color:#fff;'
+        lab = (f'<div style="position:absolute;left:{cx - 400:.0f}px;width:800px;top:{cy + size / 2 + 30:.0f}px;text-align:center;font:600 46px Inter;color:#fff;'
                f'letter-spacing:-.02em;text-shadow:0 4px 16px rgba(0,0,0,.6)" class="{i}l">{esc(e["label"])}</div>') if e.get('label') else ''
         self.add(f'<div id="{i}" style="left:0;top:0;width:1080px;height:1920px">{"".join(dots)}{lab}</div>', z=12 if (self.cut and e.get('behind')) else 34)
         self.c.js.extend(js)
