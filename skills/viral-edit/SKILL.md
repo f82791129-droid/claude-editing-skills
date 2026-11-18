@@ -86,6 +86,8 @@ Transcripts: `GROQ_API_KEY`, or `bash "$KIT/setup.sh" --local-asr` once for loca
 - Avoid `grain` on such footage: noise compresses into blocks on Instagram. Contrast in `cinema` is kept gentle for the same reason.
 - When you hand over a file for upload, export it with `-c:v libx264 -preset slow -crf 16 -tune film -x264-params aq-mode=3 -movflags +faststart` (fewer blocks after Instagram recompresses it).
 
+- **Damaged source frames.** Phone and CapCut exports can break fast motion (a hand flying up) into staircase blocks, and the edit makes it no better. Before planning beats, look through the clip frame by frame wherever there is fast motion (tile crops of the hands and face, ~4 frames apart). When a stretch is damaged, put a full-screen card (`chart_card`, `icon_card`, `paper_card`) over exactly that stretch, starting just before it, with `"enter_for": 0.2` so the damage never shows through a fade. Tell the user the damage is in their original.
+
 ### Look
 - `look`: `cinema` (default here) or `glass` (the violet glass-fx look).
 - `theme`: `gold` (default), `lime`, `red`, `sky`, or the glass ones; `brand.accent` overrides with your own colour.

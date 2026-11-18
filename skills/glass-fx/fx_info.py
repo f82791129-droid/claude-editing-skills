@@ -147,8 +147,8 @@ class InfoFX:
                 f'-webkit-mask:radial-gradient(70% 60% at 50% 45%,#000,transparent);mask:radial-gradient(70% 60% at 50% 45%,#000,transparent)"></div>'
                 f'<div class="a {i}d" style="inset:0">{dots}</div>{inner}</div>')
 
-    def _card_in_out(self, i, at, until):
-        self.js(f'tl.fromTo("#{i}",{{autoAlpha:0,scale:1.08,filter:"blur(18px)"}},{{autoAlpha:1,scale:1,filter:"blur(0px)",duration:.45,ease:"expo.out"}},{at:.3f});'
+    def _card_in_out(self, i, at, until, enter=.45):
+        self.js(f'tl.fromTo("#{i}",{{autoAlpha:0,scale:1.08,filter:"blur(18px)"}},{{autoAlpha:1,scale:1,filter:"blur(0px)",duration:{enter:.2f},ease:"expo.out"}},{at:.3f});'
                 f'tl.fromTo("#{i} .{i}d",{{y:0}},{{y:-60,duration:{max(.5, until - at):.3f},ease:"none"}},{at:.3f});')
         if until < self.c.dur - .06:
             self.js(f'tl.to("#{i}",{{autoAlpha:0,scale:.96,filter:"blur(14px)",duration:.35,ease:"power2.in"}},{max(at + .8, until - .35):.3f});')
@@ -165,7 +165,7 @@ class InfoFX:
                  f'<div class="a {i}t" style="left:60px;right:60px;top:{float(e.get("title_y", 1110)):.0f}px;text-align:center;font:800 76px/1.1 Inter;'
                  f'color:#fff;letter-spacing:-.03em;text-shadow:0 6px 24px rgba(0,0,0,.6)">{hl(e.get("title", ""))}</div>')
         self.add(self._card_shell(i, inner), z=38)
-        self._card_in_out(i, at, until)
+        self._card_in_out(i, at, until, float(e.get('enter_for', .45)))
         self.js(f'tl.fromTo("#{i}g",{{scale:.4,rotationY:-90,autoAlpha:0}},{{scale:1,rotationY:0,autoAlpha:1,duration:.9,ease:"expo.out"}},{at + .05:.3f});'
                 f'tl.fromTo("#{i}g",{{rotationY:0,y:0}},{{rotationY:14,y:-18,duration:{max(.5, until - at - .9):.3f},ease:"sine.inOut"}},{at + .95:.3f});'
                 f'tl.fromTo("#{i} .{i}t",{{autoAlpha:0,y:40,filter:"blur(12px)"}},{{autoAlpha:1,y:0,filter:"blur(0px)",duration:.5,ease:"expo.out"}},{at + .3:.3f});')
@@ -203,7 +203,7 @@ class InfoFX:
                  + (f'<div class="a {i}u" style="left:60px;right:60px;top:{float(e.get("chart_y", 560)) + H + 110:.0f}px;text-align:center;font:700 46px/1.2 Inter;'
                     f'color:#fff;opacity:.95;text-shadow:0 4px 16px rgba(0,0,0,.6)">{hl(e["sub"])}</div>' if e.get('sub') else ''))
         self.add(self._card_shell(i, inner), z=38)
-        self._card_in_out(i, at, until)
+        self._card_in_out(i, at, until, float(e.get('enter_for', .45)))
         draw = float(e.get('draw_for', 1.3))
         self.js(f'tl.fromTo("#{i} .{i}t",{{autoAlpha:0,y:40,filter:"blur(12px)"}},{{autoAlpha:1,y:0,filter:"blur(0px)",duration:.5,ease:"expo.out"}},{at + .1:.3f});'
                 f'tl.fromTo("#{i} .{i}p",{{autoAlpha:0,y:80,scale:.92}},{{autoAlpha:1,y:0,scale:1,duration:.6,ease:"expo.out"}},{at + .2:.3f});'
