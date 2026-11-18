@@ -67,6 +67,10 @@ Transcripts: `GROQ_API_KEY`, or `bash "$KIT/setup.sh" --local-asr` once for loca
 
 ### Presets, several clips, studio voice
 - **`"preset": "shahlar"`** loads `presets/shahlar.json` under the spec (the spec's own fields win; effects are never preset). **When the user says "Şahlar bəy üçün edit et" (edit for Şahlar bəy), use `"preset": "shahlar"`.** Make a new preset by saving a reel's look fields (lang, look, theme, brand, voice, cutout, trim_pauses, cut_zoom, grain, sfx, captions) as `presets/<name>.json`, and update one when the user changes their mind about a style. The `shahlar` preset is provisional until the user confirms it.
+- **`"info_bar": {"name": "…", "role": "…", "y": 1440, "verified": true}`** — a small glass name bar with a blue verified tick for the whole reel ("Pirəliyev Şahlar ✓ • Müəllimlər üçün mentor").
+- **`"captions": {"style": "highlight"}`** — white heavy captions, key words inside a premium dark-blue highlight box.
+- **`"music": {"src": "nasheed.wav", "gain_db": -14}`** — background music mixed after the render and ducked under the voice (sidechain). For Şahlar bəy it is always a wordless a cappella nasheed (no instruments); see `_music` in his preset.
+- **"Şahlar bəy üçün edit et" → `"preset": "shahlar"` (confirmed style).** Build the beats with the infographics above (glow_number, neon_pill, choice_cards, icon_card, chart_card) in premium dark blue, white text, the name bar, the quiet nasheed. Speaker sits right of centre: put cards on the left (`"side": "left"`).
 - **"Siberian Wellness reklamı" (a Siberian Wellness ad) → `"preset": "siberian"`** — green + gold (emerald theme), for @sw.fidan. **Always deliver three things: the reel, a cover and a caption.**
   - Cover: 1080×1920 HTML rendered with Playwright. Use a frame where she smiles with her mouth closed, holding the product. Put the photo a little smaller at the bottom, the text in a clean band above the head ("SIBERIAN WELLNESS" pill, gold serif product name, serif italic one-liner) and a green/gold CTA pill under the product. Keep the text out of the face and off the product, and inside the 3:4 grid crop (y 240–1680). Write brand names in their own spelling (SIBERIAN, not SİBERİAN).
   - Caption: 2–3 variants in Azerbaijani, using only what the video says about the product, ending with "Qida əlavəsidir, dərman vasitəsi deyil. İstifadədən əvvəl həkimlə məsləhətləşin." Contact lines come from her profile (free advice, delivery across Azerbaijan, write to order). Never add health claims the video doesn't make.
@@ -101,6 +105,11 @@ Transcripts: `GROQ_API_KEY`, or `bash "$KIT/setup.sh" --local-asr` once for loca
 | `bubble` | chat bubble: typing dots, then the message | `text`, `from`, `side`, `color: blue\|green\|gray\|white`, `text_at` |
 | `star_rating` | five stars fill in, score and label | `score`, `label`, `y` |
 | `dot_shape` | glowing dots fly in and build a shape | `shape: target\|trophy\|heart\|star\|check\|arrow\|chart\|bolt`, `label`, `behind`, `size`, `y` |
+| `glow_number` | a huge glossy number that glows (premium dark blue) and floats, two short lines beside it | `text` ("1", "3"), `lines` (`*word*` = blue highlight box), `size`, `line_size`, `side`/`x`, `y` |
+| `neon_pill` | a glossy 3D pill badge that pops and breathes, an optional white line over it | `text`, `over`, `over_size`, `pill_at`, `icon` (up, flat, down, message, check, question), `size`, `side`/`x`, `y` |
+| `choice_cards` | dark glass rows, each with a glowing arrow chip, sliding in on their words | `items: [{text, icon: up\|flat\|down, at}]`, `side`, `y` |
+| `icon_card` | full-screen dark card, one big glowing glyph turning slowly ("?"), a title | `glyph`, `title`, `glyph_size`; add `"hide_captions": true` |
+| `chart_card` | full-screen line chart that draws itself, a glowing dot riding the tip, area fill, tag pill | `trend: up\|flat\|down`, `title`, `tag`, `sub`, `sub_at`, `draw_for`; add `"hide_captions": true`. It shows a direction only: never invent numbers or axes for it |
 | `transition` | a cut accent | `kind: flash\|pixel\|whip\|bw\|leak`, `at` |
 
 Plus from glass-fx: `hook`, `depth_focus`, `stat`, `name_tag`, `cta`, `checklist`, `quote_note`, `typing_search`, `halo_search`, `takeover`, `ribbon_wrap`, `falling_cards`, `social_orbit`, `icon_pop`, `film_strip`, `chrome_title`, `glass_card`, `light_leak`.

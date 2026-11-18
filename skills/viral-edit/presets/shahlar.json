@@ -1,21 +1,16 @@
 {
-  "_about": "Şahlar bəy. PROVISIONAL: the look of the first podcast edit (navy, clean medium sound, studio-mic voice, no grain, de-blocked footage, source frame rate). The user will confirm or change the style after reviewing; update this file then.",
+  "_about": "Şahlar bəy (Pirəliyev Şahlar, mentor for teachers). CONFIRMED by the user: animated infographics in the max.vfx creator style (glowing glossy number, glossy pill badges, choice cards with arrows, full-screen '?' card, full-screen line chart that draws itself), white text with PREMIUM DARK BLUE emphasis, a quiet Islamic nasheed (a cappella, no instruments) ducked under the voice, and a name bar at the bottom with a blue verified tick for the whole video. Hook in the first second, nothing said or shown twice, no hiss, medium clean sound effects, studio-mic voice, source frame rate, de-blocked footage.",
+  "_music": "No nasheed file ships with the repo. Ask the user for one, or (with their OK, it spends credits) generate it with ElevenLabs eleven_music_v2_5: 'A cappella Islamic nasheed, calm and spiritual, peaceful and hopeful. Soft warm male choir humming a slow gentle melody in a Middle Eastern maqam, wordless humming and soft aah vocals only, layered harmonies, light natural reverb. Slow, serene, made to sit quietly under a spoken talk.' Check it with Whisper for words (keep only wordless parts) and for percussion transients, loop with a crossfade, then pass it as music.src.",
   "lang": "az",
   "look": "cinema",
   "theme": "navy",
   "voice": "mic",
   "cutout": true,
-  "trim_pauses": 0.35,
-  "cut_zoom": 1.08,
+  "deblock": true,
   "grain": 0,
-  "sfx": {
-    "palette": "clean",
-    "level": "medium",
-    "gap": 0.6
-  },
-  "captions": {
-    "style": "editorial",
-    "top": 1250
-  },
-  "deblock": true
+  "cut_zoom": 1.08,
+  "sfx": {"palette": "clean", "level": "medium", "gap": 0.6},
+  "captions": {"style": "highlight", "top": 1250, "size": 64},
+  "info_bar": {"name": "Pirəliyev Şahlar", "role": "Müəllimlər üçün mentor", "y": 1440, "verified": true},
+  "music": {"duck": true, "gain_db": -14}
 }

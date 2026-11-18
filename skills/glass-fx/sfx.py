@@ -190,6 +190,11 @@ CUES = {
     'star_rating': [('shimmer', .3, 2, .8)],
     'dot_shape': [('rise', -.5, 2, .6), ('shimmer', .3, 1, .6)],
     'transition': [('whoosh', -.08, 2, .8)],
+    'glow_number': [('sub', 0, 3, .8), ('chime', .25, 1, .6)],
+    'neon_pill': [('pop', 'pill', 2, .9)],
+    'choice_cards': [('tick', 'items', 1, 1.0)],
+    'icon_card': [('rise', -.5, 3, .7), ('sub', 0, 3, .8)],
+    'chart_card': [('whoosh', -.05, 3, .8), ('rise', .5, 2, .6), ('chime', 1.8, 2, .7)],
 }
 
 LEVELS = {'off': 0.0, 'soft': .32, 'medium': .55}

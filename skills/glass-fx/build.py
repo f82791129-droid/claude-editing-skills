@@ -25,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'kit'))
 from reel import Job, Comp, bare, count_js, duration, groups, load_words, parse_number, rich, run  # noqa: E402
 import sfx  # noqa: E402
 from fx_editorial import EditorialFX, lower as lang_lower  # noqa: E402
+from fx_info import InfoFX  # noqa: E402
 
 THEMES = {
     'violet': dict(accent='#8b5cf6', accent2='#c4b5fd', deep='#140630', mid='#3b1d8f', glow='#a78bfa', ink='#1b1035'),
@@ -124,7 +125,7 @@ def apply_preset(spec_path, skill_dir):
         sys.exit(f'preset "{name}" not found in {pf.parent} (have: {", ".join(p.stem for p in pf.parent.glob("*.json"))})')
     base = {k: v for k, v in json.loads(pf.read_text()).items() if not k.startswith('_')}
     merged = {**base, **{k: v for k, v in s.items() if k != 'preset'}}
-    for k in ('sfx', 'captions', 'brand'):
+    for k in ('sfx', 'captions', 'brand', 'music', 'info_bar'):
         if isinstance(base.get(k), dict) and isinstance(s.get(k), dict):
             merged[k] = {**base[k], **s[k]}
     out = spec_path.with_name(f'.{spec_path.stem}.preset.json')
@@ -252,7 +253,7 @@ def tighten(spec_path):
     return tight, cuts
 
 
-class Reel(EditorialFX):
+class Reel(EditorialFX, InfoFX):
     def __init__(self, spec, cuts=(), skill='glass-fx', look='glass'):
         self.j = j = Job(spec, skill)
         self.c = c = Comp(j)
@@ -405,9 +406,18 @@ class Reel(EditorialFX):
                 self.js(f'tl.set("#cp{i}",{{visibility:"visible"}},{t0:.3f});tl.set("#cp{i}",{{visibility:"hidden"}},{t1:.3f});'
                         f'tl.fromTo("#cp{i}",{{scale:1.35}},{{scale:1,duration:.18,ease:"power3.out"}},{t0:.3f});')
             return
+        if style == 'highlight':
+            self.info_css()
+            c.css.append(f'''.cp{{position:absolute;left:70px;width:940px;top:{top:.0f}px;text-align:center;visibility:hidden;
+  font:800 {size:.0f}px/1.12 'Inter';color:#fff;letter-spacing:-.03em;text-shadow:0 4px 18px rgba(0,0,0,.7),0 0 2px rgba(0,0,0,.6)}}
+.cp .w{{display:inline-block;margin:0 .08em}}
+.cp .k{{display:inline-block;color:#fff;padding:0 .2em .04em;border-radius:.2em;text-shadow:0 2px 8px rgba(0,10,60,.5);
+  background:linear-gradient(180deg,#4f7dff 0%,#1f4fd6 48%,#0b2a7a 100%);
+  box-shadow:0 0 26px #3d7bff99,inset 0 2px 0 rgba(255,255,255,.45),inset 0 -6px 12px rgba(0,8,40,.35)}}''')
+            style = '_done'
         glow = f"0 0 30px {T['glow']}aa," if style == 'glass' else ''
         kcol = '#fff' if style == 'glass' else self.lit()
-        c.css.append(f'''.cp{{position:absolute;left:90px;width:900px;top:{top:.0f}px;text-align:center;visibility:hidden;
+        c.css.append('' if style == '_done' else f'''.cp{{position:absolute;left:90px;width:900px;top:{top:.0f}px;text-align:center;visibility:hidden;
   font:{600 if style == 'glass' else 700} {size:.0f}px/1.08 'Inter';color:#fff;letter-spacing:-.025em;text-shadow:{glow}0 4px 18px rgba(0,0,0,.6)}}
 .cp .w{{display:inline-block;margin:0 .1em}}
 .cp .k{{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;font-size:1.22em;letter-spacing:-.01em;
@@ -416,8 +426,10 @@ class Reel(EditorialFX):
         for i, g in enumerate(gs):
             t0 = max(0, g[0][1] - 0.05)
             t1 = gs[i + 1][0][1] - 0.05 if i + 1 < len(gs) else c.dur
-            if any(a <= t0 < b for a, b in hide):
+            if any(a - .2 <= t0 < b for a, b in hide):
                 continue
+            # a line that runs into a full-screen card ends where the card begins
+            t1 = min([t1] + [a for a, b in hide if t0 < a < t1])
             spans = ''.join(f'<span class="w{" k" if w in keys else ""}" id="cp{i}_{q}">{esc(w)}</span>' for q, (w, _) in enumerate(g))
             c.body.append(f'<div class="cp" id="cp{i}" data-z="40">{spans}</div>')
             self.js(f'tl.set("#cp{i}",{{visibility:"visible"}},{t0:.3f});tl.set("#cp{i}",{{visibility:"hidden"}},{t1:.3f});')
@@ -798,6 +810,8 @@ tl.to(o,{{n:s.length,duration:{tdur:.3f},ease:"none",onUpdate:()=>{{el.textConte
                     for k, it in enumerate(e.get('items') or []):
                         ti = self.j.t(it.get('at'), at + k * .5)
                         ev.append((self.j.t(it.get('done_at'), ti + .35), name, pri, g))
+                elif off == 'pill':
+                    ev.append((self.j.t(e.get('pill_at'), at), name, pri, g))
                 elif off == 'end':
                     ev.append((at + float(e.get('count_for', 1.2)), name, pri, g))
                 else:
@@ -810,6 +824,10 @@ tl.to(o,{{n:s.length,duration:{tdur:.3f},ease:"none",onUpdate:()=>{{el.textConte
         self.c.body.append(f'<audio id="sfxa" src="{self.c.asset(out)}" data-start="0" data-media-start="0" data-duration="{self.c.dur:.3f}" '
                            f'data-track-index="{self.c.nt()}" data-volume="1"></audio>')
         m = self.j.get('music')
+        if isinstance(m, dict) and m.get('duck', True) and m.get('src'):
+            # mixed after the render with sidechain ducking: quiet under the voice, a little up in the gaps
+            self.duck_music = (self.j.path(m['src']), float(m.get('gain_db', -14)), float(m.get('from', 0)))
+            return
         if m:
             mp = self.j.path(m['src'] if isinstance(m, dict) else m)
             vol = float(m.get('volume', .12)) if isinstance(m, dict) else .12
@@ -927,6 +945,7 @@ tl.to(o,{{n:s.length,duration:{tdur:.3f},ease:"none",onUpdate:()=>{{el.textConte
                 sys.exit(f'effect "{t}" is not one of: ' + ', '.join(k[3:] for k in dir(self) if k.startswith('fx_')))
             fn(e)
         self.captions()
+        self.info_bar()
         self.grain()
         self.sound()
         # z order: every top-level layer carries data-z
@@ -941,7 +960,17 @@ tl.to(o,{{n:s.length,duration:{tdur:.3f},ease:"none",onUpdate:()=>{{el.textConte
                     b = b.replace('<div ', f'<div style="position:absolute;z-index:{z}" ', 1)
             out.append(b)
         self.c.body = out
-        self.j.finish(self.c)
+        out = self.j.finish(self.c)
+        if getattr(self, 'duck_music', None):
+            src, gain, frm = self.duck_music
+            tmp = out.with_name(out.stem + '.mix.mp4')
+            run(['ffmpeg', '-v', 'error', '-y', '-i', out, '-ss', f'{frm:.3f}', '-i', src, '-filter_complex',
+                 f'[1:a]volume={gain:.1f}dB,afade=t=in:d=1.0,afade=t=out:st={max(0, self.c.dur - 2):.3f}:d=2,aresample=48000[m];'
+                 '[0:a]asplit=2[v][sc];[m][sc]sidechaincompress=threshold=0.02:ratio=6:attack=25:release=450:makeup=1[md];'
+                 '[v][md]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95[a]',
+                 '-map', '0:v', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '256k', '-shortest', tmp])
+            tmp.replace(out)
+            print(f'music: {src.name} ducked under the voice at {gain:+.0f} dB')
 
 
 def main(argv, skill='glass-fx', look='glass', doc=__doc__):
